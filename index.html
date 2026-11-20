@@ -3,190 +3,517 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>JLPT N3 문자·어휘 학습기</title>
+  <title>일본어 어휘 학습기</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@500;700&family=Pretendard:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@500;700&family=Pretendard:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
-  <header class="app-header">
-    <div class="header-inner">
-      <div class="brand-wrap">
-        <span class="brand-tag">JLPT N3</span>
-        <h1 class="app-title">문자·어휘 학습기</h1>
+<body class="app-body" data-mask-reading="false" data-mask-meaning="false">
+  <!-- 상단 공통 헤더 및 툴바 -->
+  <header id="appHeader" class="app-header">
+    <div class="header-top">
+      <div class="brand-area">
+        <span class="brand-badge">JLPT 어휘</span>
+        <h1 class="app-title">일본어 어휘 학습기</h1>
       </div>
-      <div class="header-controls">
-        <div class="tts-control" title="일본어 TTS 속도 조절 (0.6x ~ 1.4x)">
-          <label for="ttsSpeedRange">TTS 속도</label>
-          <input id="ttsSpeedRange" type="range" min="0.6" max="1.4" step="0.05" value="0.95" />
-          <span id="ttsSpeedDisplay">0.95x</span>
+
+      <div id="globalToolbar" class="global-toolbar" role="toolbar" aria-label="전역 학습 도구">
+        <!-- 전역 읽기/뜻 가림 토글 -->
+        <button
+          id="toggleGlobalReadingBtn"
+          type="button"
+          class="tool-btn"
+          data-global-mask="reading"
+          aria-pressed="false"
+          title="전체 히라가나(읽기) 가림 토글"
+        >
+          🙈 전체 읽기 가림
+        </button>
+        <button
+          id="toggleGlobalMeaningBtn"
+          type="button"
+          class="tool-btn"
+          data-global-mask="meaning"
+          aria-pressed="false"
+          title="전체 뜻 가림 토글"
+        >
+          🙉 전체 뜻 가림
+        </button>
+
+        <!-- 일본어 TTS 음성 속도 조절 -->
+        <div class="tts-speed-control" title="일본어 TTS 재생 속도 조절 (0.6x ~ 1.4x)">
+          <label for="ttsSpeedRange" class="tts-speed-label">🔊 TTS</label>
+          <input
+            id="ttsSpeedRange"
+            type="range"
+            min="0.6"
+            max="1.4"
+            step="0.05"
+            value="0.95"
+            data-tts-role="speed-range"
+          />
+          <span id="ttsSpeedValue" class="tts-speed-value" data-tts-role="speed-display">0.95x</span>
         </div>
-        <button id="themeToggleBtn" type="button" class="btn">🌙 다크 모드</button>
-        <button id="shortcutModalOpenBtn" type="button" class="btn">⌨️ 단축키</button>
+
+        <!-- 라이트 / 다크 모드 토글 -->
+        <button
+          id="themeToggleBtn"
+          type="button"
+          class="tool-btn"
+          data-theme-toggle="true"
+          aria-pressed="false"
+          title="라이트 모드 / 다크 모드 전환"
+        >
+          🌙 다크 모드
+        </button>
+
+        <!-- 단축키 안내 및 데이터 관리 빠른 접근 -->
+        <button
+          id="openShortcutModalBtn"
+          type="button"
+          class="tool-btn"
+          data-modal-target="shortcutModal"
+          aria-haspopup="dialog"
+          title="전역 단축키 안내 보기"
+        >
+          ⌨️ 단축키
+        </button>
+        <button
+          id="quickDataManageBtn"
+          type="button"
+          class="tool-btn"
+          data-jump-tab="dashboard"
+          data-scroll-target="dataManagementSection"
+          title="학습 데이터 백업/복원/초기화 영역으로 이동"
+        >
+          💾 데이터 관리
+        </button>
       </div>
     </div>
 
-    <nav class="tab-nav" role="tablist" aria-label="학습 메뉴">
-      <button id="tabBtn-dashboard" type="button" class="tab-btn active" data-tab="dashboard" role="tab">대시보드</button>
-      <button id="tabBtn-vocab" type="button" class="tab-btn" data-tab="vocab" role="tab">단어장</button>
-      <button id="tabBtn-flashcard" type="button" class="tab-btn" data-tab="flashcard" role="tab">플래시카드</button>
-      <button id="tabBtn-quiz" type="button" class="tab-btn" data-tab="quiz" role="tab">4지선다 퀴즈</button>
-      <button id="tabBtn-subjective" type="button" class="tab-btn" data-tab="subjective" role="tab">주관식 테스트</button>
-      <button id="tabBtn-wrongnote" type="button" class="tab-btn" data-tab="wrongnote" role="tab">오답노트</button>
-      <button id="tabBtn-guide" type="button" class="tab-btn" data-tab="guide" role="tab">사용방법</button>
+    <!-- 메인 7개 탭 내비게이션 -->
+    <nav id="mainTabNav" class="main-tab-nav" role="tablist" aria-label="학습 탭 메뉴">
+      <button
+        id="tab-dashboard"
+        type="button"
+        class="tab-btn is-active"
+        role="tab"
+        aria-selected="true"
+        aria-controls="panel-dashboard"
+        data-tab="dashboard"
+      >
+        대시보드
+      </button>
+      <button
+        id="tab-vocab"
+        type="button"
+        class="tab-btn"
+        role="tab"
+        aria-selected="false"
+        aria-controls="panel-vocab"
+        data-tab="vocab"
+      >
+        단어장
+      </button>
+      <button
+        id="tab-flashcard"
+        type="button"
+        class="tab-btn"
+        role="tab"
+        aria-selected="false"
+        aria-controls="panel-flashcard"
+        data-tab="flashcard"
+      >
+        플래시카드
+      </button>
+      <button
+        id="tab-quiz"
+        type="button"
+        class="tab-btn"
+        role="tab"
+        aria-selected="false"
+        aria-controls="panel-quiz"
+        data-tab="quiz"
+      >
+        4지선다 퀴즈
+      </button>
+      <button
+        id="tab-subjective"
+        type="button"
+        class="tab-btn"
+        role="tab"
+        aria-selected="false"
+        aria-controls="panel-subjective"
+        data-tab="subjective"
+      >
+        주관식 테스트
+      </button>
+      <button
+        id="tab-wrongnote"
+        type="button"
+        class="tab-btn"
+        role="tab"
+        aria-selected="false"
+        aria-controls="panel-wrongnote"
+        data-tab="wrongnote"
+      >
+        오답노트
+      </button>
+      <button
+        id="tab-guide"
+        type="button"
+        class="tab-btn"
+        role="tab"
+        aria-selected="false"
+        aria-controls="panel-guide"
+        data-tab="guide"
+      >
+        사용방법
+      </button>
     </nav>
   </header>
 
-  <main class="main-container">
-    <!-- 1. 대시보드 -->
-    <section id="panel-dashboard" class="tab-panel">
-      <div id="dashboardStatsGrid" class="stats-grid"></div>
-
-      <div class="panel-card">
-        <h2 class="section-heading">커스텀 단어장 만들기</h2>
-        <div class="inline-form">
-          <input id="customDeckNameInput" type="text" class="input" placeholder="새 커스텀 단어장 이름 (예: 문맥구성 취약)" />
-          <button id="createCustomDeckBtn" type="button" class="btn btn-primary">+ 새 단어장 생성</button>
-        </div>
-        <div id="customDeckBadges" class="deck-badges"></div>
+  <main id="mainContent" class="main-content">
+    <!-- ===================================================================== -->
+    <!-- 1. 대시보드 탭                                                        -->
+    <!-- ===================================================================== -->
+    <section
+      id="panel-dashboard"
+      class="tab-panel is-active"
+      role="tabpanel"
+      aria-labelledby="tab-dashboard"
+      data-tab-panel="dashboard"
+    >
+      <div id="dashboardSummaryCards" class="stats-grid" aria-label="학습 현황 요약">
+        <button type="button" class="stat-card" data-stat-key="total" data-jump-tab="vocab">
+          <span class="stat-label">전체 어휘 수</span>
+          <strong id="statTotalCount" class="stat-value">0</strong>
+          <span class="stat-hint">단어장 전체 보기</span>
+        </button>
+        <button type="button" class="stat-card" data-stat-key="known" data-jump-tab="vocab" data-filter-status="known">
+          <span class="stat-label">외움</span>
+          <strong id="statKnownCount" class="stat-value status-known-text">0</strong>
+          <span class="stat-hint">외움 필터 이동</span>
+        </button>
+        <button type="button" class="stat-card" data-stat-key="unsure" data-jump-tab="vocab" data-filter-status="unsure">
+          <span class="stat-label">헷갈림</span>
+          <strong id="statUnsureCount" class="stat-value status-unsure-text">0</strong>
+          <span class="stat-hint">헷갈림 복습 이동</span>
+        </button>
+        <button type="button" class="stat-card" data-stat-key="unknown" data-jump-tab="vocab" data-filter-status="unknown">
+          <span class="stat-label">미암기</span>
+          <strong id="statUnknownCount" class="stat-value status-unknown-text">0</strong>
+          <span class="stat-hint">미암기 학습 이동</span>
+        </button>
+        <button type="button" class="stat-card" data-stat-key="favorites" data-jump-tab="vocab" data-filter-fav="true">
+          <span class="stat-label">즐겨찾기</span>
+          <strong id="statFavoritesCount" class="stat-value fav-text">0</strong>
+          <span class="stat-hint">즐겨찾기 모아보기</span>
+        </button>
+        <button type="button" class="stat-card" data-stat-key="wrong" data-jump-tab="wrongnote">
+          <span class="stat-label">누적 오답 수</span>
+          <strong id="statWrongCount" class="stat-value wrong-text">0</strong>
+          <span class="stat-hint">오답노트 이동</span>
+        </button>
       </div>
 
-      <div class="panel-card">
-        <h2 class="section-heading">학습 데이터 관리</h2>
-        <p class="muted-text">암기 상태, 즐겨찾기, 품사 메모, 커스텀 단어장, 오답 기록, 설정을 JSON으로 백업·복원하거나 초기화할 수 있습니다.</p>
-        <div class="button-row">
-          <button id="exportDataBtn" type="button" class="btn btn-primary">⬇️ JSON 내보내기(백업)</button>
-          <button id="importDataBtn" type="button" class="btn">⬆️ JSON 가져오기(복원)</button>
-          <input id="importDataFileInput" type="file" accept="application/json" class="hidden" />
-          <button id="resetAllDataBtn" type="button" class="btn btn-danger">🗑️ 전체 초기화</button>
+      <div id="dashboardQuickActions" class="surface-card">
+        <div class="section-header">
+          <h2 class="section-title">빠른 학습 이동</h2>
+          <span class="section-subtitle">자주 쓰는 학습 모드로 바로 이동합니다.</span>
         </div>
+        <div class="quick-actions-grid">
+          <button type="button" class="action-btn primary" data-jump-tab="vocab">📖 단어장 열기</button>
+          <button type="button" class="action-btn" data-jump-tab="flashcard">🃏 플래시카드 시작</button>
+          <button type="button" class="action-btn" data-jump-tab="quiz">✅ 4지선다 퀴즈</button>
+          <button type="button" class="action-btn" data-jump-tab="subjective">✍️ 주관식 테스트</button>
+          <button type="button" class="action-btn" data-jump-tab="wrongnote">📕 오답 복습하기</button>
+        </div>
+      </div>
+
+      <div id="customDeckManager" class="surface-card">
+        <div class="section-header">
+          <h2 class="section-title">커스텀 단어장 관리</h2>
+          <span class="section-subtitle">새 단어장을 만들거나 기존 단어장 구성을 확인할 수 있습니다.</span>
+        </div>
+        <div class="inline-controls">
+          <input
+            id="newDeckNameInput"
+            type="text"
+            class="text-input"
+            placeholder="새 단어장 이름 입력 (예: 2024~2025 기출, 헷갈리는 동사)"
+            aria-label="새 커스텀 단어장 이름"
+          />
+          <button id="createDeckBtn" type="button" class="action-btn primary">+ 새 단어장 생성</button>
+        </div>
+        <div id="customDeckList" class="deck-chip-list" aria-live="polite"></div>
+      </div>
+
+      <div id="dataManagementSection" class="surface-card">
+        <div class="section-header">
+          <h2 class="section-title">학습 데이터 백업 · 복원 · 초기화</h2>
+          <span class="section-subtitle">암기 상태, 즐겨찾기, 품사 메모, 커스텀 단어장, 오답 기록, 설정을 관리합니다.</span>
+        </div>
+        <div class="button-group">
+          <button id="exportBackupBtn" type="button" class="action-btn primary" data-data-action="export">⬇️ JSON 백업 내보내기</button>
+          <button id="importBackupBtn" type="button" class="action-btn" data-data-action="import">⬆️ JSON 복원 가져오기</button>
+          <input
+            id="importBackupFileInput"
+            type="file"
+            accept=".json,application/json"
+            class="visually-hidden"
+            data-data-input="import-file"
+          />
+          <button id="resetAllDataBtn" type="button" class="action-btn danger" data-data-action="reset">🗑️ 전체 초기화</button>
+        </div>
+        <p id="dataStatusMessage" class="helper-note" role="status" aria-live="polite"></p>
       </div>
     </section>
 
-    <!-- 2. 단어장 -->
-    <section id="panel-vocab" class="tab-panel hidden">
-      <div class="panel-card">
-        <div class="filter-toolbar">
-          <input id="vocabSearchInput" type="text" class="input" placeholder="단어, 가나, 뜻, 품사 메모 검색..." />
-          <select id="vocabCategoryFilter" class="select">
-            <option value="ALL">전체 기출·예상 분류</option>
+    <!-- ===================================================================== -->
+    <!-- 2. 단어장 탭                                                          -->
+    <!-- ===================================================================== -->
+    <section
+      id="panel-vocab"
+      class="tab-panel"
+      role="tabpanel"
+      aria-labelledby="tab-vocab"
+      data-tab-panel="vocab"
+      hidden
+    >
+      <div id="vocabFilterBar" class="surface-card filter-card">
+        <div class="filter-grid">
+          <input
+            id="vocabSearchInput"
+            type="search"
+            class="text-input"
+            placeholder="단어, 히라가나, 뜻, 품사 메모 검색..."
+            aria-label="단어장 검색"
+          />
+          <select id="vocabYearCategoryFilter" class="select-input" aria-label="기출 연도 또는 분류 필터">
+            <option value="ALL">전체 연도·분류</option>
           </select>
-          <select id="vocabPosFilter" class="select">
+          <select id="vocabPosFilter" class="select-input" aria-label="품사 필터">
             <option value="ALL">전체 품사</option>
             <option value="명사">명사</option>
             <option value="동사">동사</option>
             <option value="い형용사">い형용사</option>
             <option value="な형용사">な형용사</option>
+            <option value="접두어">접두어</option>
+            <option value="접미어">접미어</option>
+            <option value="복합동사">복합동사</option>
             <option value="부사">부사</option>
             <option value="외래어">외래어</option>
-            <option value="접사">접사·접두/접미</option>
-            <option value="관용·접속·표현">관용·접속·문법/청해</option>
+            <option value="유의어">유의어</option>
           </select>
-          <select id="vocabStatusFilter" class="select">
+          <select id="vocabStatusFilter" class="select-input" aria-label="암기 상태 필터">
             <option value="ALL">전체 암기 상태</option>
             <option value="known">외움</option>
             <option value="unsure">헷갈림</option>
             <option value="unknown">미암기</option>
           </select>
-          <select id="vocabDeckFilter" class="select">
+          <select id="vocabDeckFilter" class="select-input" aria-label="커스텀 단어장 필터">
             <option value="ALL">전체 단어장</option>
-            <option value="__FAV__">★ 즐겨찾기만</option>
           </select>
-          <select id="vocabSortSelect" class="select">
+          <select id="vocabSortSelect" class="select-input" aria-label="단어장 정렬">
             <option value="default">기본 순서</option>
             <option value="dupFirst">중복 기출 우선</option>
-            <option value="yearAsc">분류 오름차순</option>
-            <option value="yearDesc">분류 내림차순</option>
+            <option value="yearAsc">기출 연도·분류 오름차순</option>
+            <option value="yearDesc">기출 연도·분류 내림차순</option>
+            <option value="kanaAsc">가나순(あ〜ん)</option>
           </select>
-          <button id="vocabFavOnlyToggleBtn" type="button" class="btn">★ 즐겨찾기 모아보기</button>
+          <button
+            id="vocabFavoritesOnlyBtn"
+            type="button"
+            class="action-btn"
+            aria-pressed="false"
+            data-toggle-fav-only="true"
+          >
+            ★ 즐겨찾기 모아보기
+          </button>
         </div>
 
-        <div class="batch-bar">
-          <label class="checkbox-label">
-            <input id="vocabSelectAllCheckbox" type="checkbox" />
-            <span>현재 목록 전체 선택 (<span id="vocabSelectedCount">0</span>개)</span>
+        <div id="vocabBatchBar" class="batch-toolbar">
+          <label class="checkbox-inline">
+            <input id="vocabSelectAllChk" type="checkbox" data-batch-select="all" />
+            <span>현재 목록 선택 (<strong id="vocabSelectedCount">0</strong>개)</span>
           </label>
-          <select id="vocabTargetDeckSelect" class="select">
+
+          <select id="vocabBatchDeckSelect" class="select-input" aria-label="선택 단어를 저장할 단어장">
             <option value="">-- 저장할 커스텀 단어장 --</option>
           </select>
-          <button id="vocabSaveSelectedDeckBtn" type="button" class="btn btn-primary">선택 단어 저장</button>
-          <button id="vocabSaveNewDeckBtn" type="button" class="btn">+ 새 단어장으로 저장</button>
-          <span id="vocabResultSummary" class="muted-text right-align">0개</span>
+          <button id="vocabSaveToDeckBtn" type="button" class="action-btn primary" data-batch-action="save-deck">
+            선택 단어 저장
+          </button>
+          <button id="vocabCreateDeckFromSelectedBtn" type="button" class="action-btn" data-batch-action="create-deck">
+            + 새 단어장 생성 및 저장
+          </button>
+          <span id="vocabListCountLabel" class="list-count-label">0개 단어</span>
         </div>
       </div>
 
-      <div id="vocabCardGrid" class="vocab-grid"></div>
-      <div class="center-action">
-        <button id="vocabLoadMoreBtn" type="button" class="btn hidden">더 보기</button>
+      <div id="vocabListContainer" class="vocab-grid" aria-live="polite"></div>
+      <div class="load-more-wrap">
+        <button id="vocabLoadMoreBtn" type="button" class="action-btn" hidden>단어 더 보기</button>
       </div>
     </section>
 
-    <!-- 3. 플래시카드 -->
-    <section id="panel-flashcard" class="tab-panel hidden">
-      <div class="panel-card">
-        <div class="filter-toolbar">
-          <select id="fcScopeSelect" class="select">
+    <!-- ===================================================================== -->
+    <!-- 3. 플래시카드 탭                                                      -->
+    <!-- ===================================================================== -->
+    <section
+      id="panel-flashcard"
+      class="tab-panel"
+      role="tabpanel"
+      aria-labelledby="tab-flashcard"
+      data-tab-panel="flashcard"
+      hidden
+    >
+      <div id="flashcardToolbar" class="surface-card filter-card">
+        <div class="filter-grid">
+          <select id="fcScopeFilter" class="select-input" aria-label="플래시카드 출제 범위">
             <option value="ALL">전체 어휘</option>
             <option value="FAV">★ 즐겨찾기만</option>
             <option value="unsure">헷갈림만</option>
             <option value="unknown">미암기만</option>
             <option value="known">외움만</option>
           </select>
-          <select id="fcCategorySelect" class="select">
-            <option value="ALL">전체 기출·예상 분류</option>
+          <select id="fcYearCategoryFilter" class="select-input" aria-label="플래시카드 기출 연도·분류">
+            <option value="ALL">전체 연도·분류</option>
           </select>
-          <select id="fcDeckSelect" class="select">
-            <option value="">-- 커스텀 단어장 선택 --</option>
+          <select id="fcDeckFilter" class="select-input" aria-label="플래시카드 커스텀 단어장">
+            <option value="">전체 단어장(필터 미적용)</option>
           </select>
-          <button id="fcShuffleBtn" type="button" class="btn">🔀 셔플</button>
-          <label class="checkbox-label">
-            <input id="fcExampleReadingChk" type="checkbox" checked />
+          <button id="fcShuffleBtn" type="button" class="action-btn" data-fc-action="shuffle">🔀 셔플</button>
+          <label class="checkbox-inline">
+            <input id="fcToggleExampleReadingChk" type="checkbox" data-fc-example="reading" checked />
             <span>예문 읽기 표시</span>
           </label>
-          <label class="checkbox-label">
-            <input id="fcExampleMeaningChk" type="checkbox" checked />
+          <label class="checkbox-inline">
+            <input id="fcToggleExampleMeaningChk" type="checkbox" data-fc-example="meaning" checked />
             <span>예문 해석 표시</span>
           </label>
         </div>
 
-        <div class="batch-bar">
-          <label class="checkbox-label">
-            <input id="fcCurrentSelectChk" type="checkbox" />
-            <span>현재 카드 체크</span>
+        <div class="batch-toolbar">
+          <label class="checkbox-inline">
+            <input id="fcCurrentCheck" type="checkbox" data-fc-select="current" />
+            <span>현재 카드 선택</span>
           </label>
-          <button id="fcSaveToDeckBtn" type="button" class="btn">선택 카드 단어장 저장</button>
-          <span id="fcProgressText" class="right-align bold-text">0 / 0</span>
+          <select id="fcDeckSelect" class="select-input" aria-label="플래시카드 저장 대상 단어장">
+            <option value="">-- 커스텀 단어장 선택 --</option>
+          </select>
+          <button id="fcSaveDeckBtn" type="button" class="action-btn" data-fc-action="save-deck">선택 단어장 저장</button>
+          <button id="fcQuickNewDeckBtn" type="button" class="action-btn" data-fc-action="new-deck">+ 새 단어장 저장</button>
+          <span id="fcCounterLabel" class="list-count-label">0 / 0</span>
         </div>
       </div>
 
-      <div id="flashcardStage" class="flashcard-stage"></div>
+      <div id="flashcardStage" class="flashcard-stage" aria-live="polite">
+        <div id="flashcardCard" class="flashcard-card" data-flipped="false" tabindex="0" role="button" aria-label="플래시카드 뒤집기">
+          <div class="card-header-row">
+            <div class="badge-group">
+              <span id="fcDupBadge" class="badge dup-badge" data-field="dup-label"></span>
+              <span id="fcPosBadge" class="badge pos-badge" data-field="pos"></span>
+            </div>
+            <div class="card-actions-inline" data-stop-flip="true">
+              <button id="fcSpeakWordBtn" type="button" class="icon-btn" data-tts-target="word" title="단어 발음 재생">🔊 단어</button>
+              <button id="fcFavBtn" type="button" class="star-btn" data-fav-role="flashcard" aria-pressed="false" title="즐겨찾기 토글">★</button>
+            </div>
+          </div>
+
+          <!-- 카드 앞면: 표기 / 읽기 -->
+          <div id="fcFrontFace" class="fc-face fc-front" data-face="front">
+            <div id="fcFrontReading" class="fc-reading maskable-reading" lang="ja" data-field="reading"></div>
+            <div id="fcFrontWord" class="fc-word ja-serif" lang="ja" data-field="word"></div>
+            <p class="fc-flip-hint">클릭하거나 Space 키를 눌러 뒷면(품사·예문) 보기</p>
+          </div>
+
+          <!-- 카드 뒷면: 품사 및 예문 1개(예문 읽기·해석 토글 및 전역 가림 연동) -->
+          <div id="fcBackFace" class="fc-face fc-back" data-face="back" hidden>
+            <div class="fc-back-head">
+              <strong id="fcBackMeaning" class="fc-meaning maskable-meaning" data-field="meaning"></strong>
+              <span id="fcBackPosMemo" class="badge pos-memo-badge" data-field="posMemo"></span>
+            </div>
+            <div class="fc-back-sub">
+              <span lang="ja" class="maskable-reading" data-field="wordAndReading"></span>
+            </div>
+
+            <div id="fcExampleBox" class="fc-example-box" data-role="example-block">
+              <div class="example-top-row">
+                <span class="example-label">예문</span>
+                <button id="fcSpeakExampleBtn" type="button" class="mini-btn" data-tts-target="example" title="예문 발음 재생">🔊 예문</button>
+              </div>
+              <p id="fcExampleText" class="example-ja" lang="ja" data-field="example"></p>
+              <p id="fcExampleReading" class="example-reading maskable-reading" lang="ja" data-field="exampleReading"></p>
+              <p id="fcExampleMeaning" class="example-meaning maskable-meaning" data-field="exampleMeaning"></p>
+            </div>
+          </div>
+
+          <!-- 3단계 암기 상태 -->
+          <div id="fcStatusBar" class="status-button-row" data-stop-flip="true">
+            <button type="button" class="status-btn" data-status="known" data-shortcut-key="1">외움</button>
+            <button type="button" class="status-btn" data-status="unsure" data-shortcut-key="2">헷갈림</button>
+            <button type="button" class="status-btn" data-status="unknown" data-shortcut-key="3">미암기</button>
+          </div>
+        </div>
+
+        <div class="fc-nav-controls">
+          <button id="fcPrevBtn" type="button" class="action-btn" data-fc-nav="prev">← 이전 카드</button>
+          <button id="fcFlipBtn" type="button" class="action-btn primary" data-fc-nav="flip">카드 뒤집기</button>
+          <button id="fcNextBtn" type="button" class="action-btn" data-fc-nav="next">다음 카드 →</button>
+        </div>
+      </div>
     </section>
 
-    <!-- 4. 4지선다 퀴즈 -->
-    <section id="panel-quiz" class="tab-panel hidden">
-      <div id="quizSetupBox" class="panel-card narrow-box">
-        <h2 class="section-heading">4지선다 퀴즈 설정</h2>
-        <div class="setup-grid">
-          <div>
+    <!-- ===================================================================== -->
+    <!-- 4. 4지선다 퀴즈 탭                                                   -->
+    <!-- ===================================================================== -->
+    <section
+      id="panel-quiz"
+      class="tab-panel"
+      role="tabpanel"
+      aria-labelledby="tab-quiz"
+      data-tab-panel="quiz"
+      hidden
+    >
+      <div id="quizSetupCard" class="surface-card quiz-setup-card" data-quiz-stage="setup">
+        <h2 class="section-title">4지선다 퀴즈 설정</h2>
+        <div class="quiz-setup-grid">
+          <div class="field-group">
             <label for="quizScopeSelect" class="field-label">출제 범위</label>
-            <select id="quizScopeSelect" class="select full-width">
+            <select id="quizScopeSelect" class="select-input">
               <option value="ALL">전체 어휘</option>
               <option value="FAV">★ 즐겨찾기</option>
+              <option value="DECK">커스텀 단어장</option>
               <option value="unsure_unknown">헷갈림 + 미암기 위주</option>
               <option value="unsure">헷갈림만</option>
               <option value="unknown">미암기만</option>
+              <option value="known">외움만</option>
             </select>
           </div>
-          <div>
-            <label for="quizCategorySelect" class="field-label">기출·예상 분류</label>
-            <select id="quizCategorySelect" class="select full-width">
-              <option value="ALL">전체 분류</option>
+
+          <div class="field-group">
+            <label for="quizDeckSelect" class="field-label">커스텀 단어장 선택</label>
+            <select id="quizDeckSelect" class="select-input" aria-label="퀴즈용 커스텀 단어장">
+              <option value="">-- 단어장 선택 --</option>
             </select>
           </div>
-          <div>
-            <label for="quizCountSelect" class="field-label">문항 수</label>
-            <select id="quizCountSelect" class="select full-width">
+
+          <div class="field-group">
+            <label for="quizYearCategorySelect" class="field-label">기출 연도·분류</label>
+            <select id="quizYearCategorySelect" class="select-input">
+              <option value="ALL">전체 연도·분류</option>
+            </select>
+          </div>
+
+          <div class="field-group">
+            <label for="quizCountSelect" class="field-label">출제 문항 수</label>
+            <select id="quizCountSelect" class="select-input">
               <option value="5">5문항</option>
               <option value="10" selected>10문항</option>
               <option value="20">20문항</option>
@@ -195,146 +522,267 @@
             </select>
           </div>
         </div>
-        <div class="batch-bar">
-          <label class="checkbox-label">
+
+        <div class="batch-toolbar">
+          <label class="checkbox-inline">
             <input id="quizShuffleChk" type="checkbox" checked />
-            <span>문제 셔플</span>
+            <span>문항 및 보기 셔플</span>
           </label>
-          <button id="startQuizBtn" type="button" class="btn btn-primary right-align">4지선다 퀴즈 시작</button>
+          <button id="startQuizBtn" type="button" class="action-btn primary" data-quiz-action="start">퀴즈 시작</button>
         </div>
       </div>
 
-      <div id="quizPlayBox" class="panel-card narrow-box hidden"></div>
+      <div id="quizPlayCard" class="surface-card quiz-play-card" data-quiz-stage="play" hidden></div>
     </section>
 
-    <!-- 5. 주관식 테스트 -->
-    <section id="panel-subjective" class="tab-panel hidden">
-      <div id="subjSetupBox" class="panel-card narrow-box">
-        <h2 class="section-heading">주관식 테스트 설정</h2>
-        <div class="setup-grid">
-          <div>
+    <!-- ===================================================================== -->
+    <!-- 5. 주관식 테스트 탭                                                   -->
+    <!-- ===================================================================== -->
+    <section
+      id="panel-subjective"
+      class="tab-panel"
+      role="tabpanel"
+      aria-labelledby="tab-subjective"
+      data-tab-panel="subjective"
+      hidden
+    >
+      <div id="subjSetupCard" class="surface-card quiz-setup-card" data-subj-stage="setup">
+        <h2 class="section-title">주관식 테스트 설정</h2>
+        <p class="helper-note">
+          표기가 히라가나로만 된 단어는 예외 규칙에 따라 한글 뜻을 제시하고 히라가나 직접 입력 또는 타일 순서 입력으로 출제됩니다.
+        </p>
+
+        <div class="quiz-setup-grid">
+          <div class="field-group">
             <label for="subjScopeSelect" class="field-label">출제 범위</label>
-            <select id="subjScopeSelect" class="select full-width">
+            <select id="subjScopeSelect" class="select-input">
               <option value="ALL">전체 어휘</option>
               <option value="FAV">★ 즐겨찾기</option>
+              <option value="DECK">커스텀 단어장</option>
               <option value="unsure_unknown">헷갈림 + 미암기 위주</option>
               <option value="unsure">헷갈림만</option>
               <option value="unknown">미암기만</option>
+              <option value="known">외움만</option>
             </select>
           </div>
-          <div>
+
+          <div class="field-group">
+            <label for="subjDeckSelect" class="field-label">커스텀 단어장 선택</label>
+            <select id="subjDeckSelect" class="select-input" aria-label="주관식용 커스텀 단어장">
+              <option value="">-- 단어장 선택 --</option>
+            </select>
+          </div>
+
+          <div class="field-group">
             <label for="subjInputModeSelect" class="field-label">입력 방식</label>
-            <select id="subjInputModeSelect" class="select full-width">
-              <option value="both">직접 입력 + 히라가나 타일 병행</option>
+            <select id="subjInputModeSelect" class="select-input">
+              <option value="both">히라가나 직접 입력 + 타일 선택 병행</option>
               <option value="typing">히라가나 직접 입력</option>
-              <option value="tiles">히라가나 타일 순서대로 클릭</option>
+              <option value="tiles">히라가나 타일 순서 선택</option>
             </select>
           </div>
-          <div>
-            <label for="subjCountSelect" class="field-label">문항 수</label>
-            <select id="subjCountSelect" class="select full-width">
+
+          <div class="field-group">
+            <label for="subjCountSelect" class="field-label">출제 문항 수</label>
+            <select id="subjCountSelect" class="select-input">
               <option value="5">5문항</option>
               <option value="10" selected>10문항</option>
               <option value="20">20문항</option>
+              <option value="30">30문항</option>
               <option value="ALL">전체</option>
             </select>
           </div>
         </div>
-        <div class="batch-bar">
-          <label class="checkbox-label">
-            <input id="subjHideMeaningChk" type="checkbox" />
+
+        <div class="batch-toolbar">
+          <label class="checkbox-inline">
+            <input id="subjHideMeaningChk" type="checkbox" data-subj-option="hide-meaning" />
             <span>뜻 숨김</span>
           </label>
-          <label class="checkbox-label">
-            <input id="subjFirstHintChk" type="checkbox" />
+          <label class="checkbox-inline">
+            <input id="subjFirstCharHintChk" type="checkbox" data-subj-option="first-hint" />
             <span>첫글자 힌트</span>
           </label>
-          <label class="checkbox-label">
+          <label class="checkbox-inline">
             <input id="subjShuffleChk" type="checkbox" checked />
             <span>셔플</span>
           </label>
-          <button id="startSubjBtn" type="button" class="btn btn-primary right-align">주관식 테스트 시작</button>
+          <button id="startSubjBtn" type="button" class="action-btn primary" data-subj-action="start">테스트 시작</button>
         </div>
       </div>
 
-      <div id="subjPlayBox" class="panel-card narrow-box hidden"></div>
+      <div id="subjPlayCard" class="surface-card quiz-play-card" data-subj-stage="play" hidden>
+        <div class="quiz-top-meta">
+          <span id="subjProgressText" class="progress-badge" data-field="progress">1 / 10</span>
+          <span id="subjRuleBadge" class="badge rule-badge" data-field="rule"></span>
+          <span id="subjScoreText" class="score-label" data-field="score">점수: 0</span>
+        </div>
+
+        <div class="subj-prompt-box">
+          <div class="subj-prompt-head">
+            <span id="subjPromptKind" class="prompt-kind"></span>
+            <button id="subjSpeakBtn" type="button" class="mini-btn" data-tts-role="subj-word">🔊 발음 듣기</button>
+          </div>
+          <div id="subjPromptWord" class="subj-target-word" lang="ja" data-field="promptWord"></div>
+          <div id="subjPromptMeaning" class="subj-target-meaning maskable-meaning" data-field="promptMeaning"></div>
+          <div id="subjHintArea" class="subj-hint-area" data-field="hint" hidden></div>
+        </div>
+
+        <!-- 히라가나 직접 입력 영역 -->
+        <div id="subjDirectInputWrap" class="subj-input-section" data-input-section="typing">
+          <label for="subjDirectInput" class="field-label">히라가나 직접 입력</label>
+          <input
+            id="subjDirectInput"
+            type="text"
+            class="text-input kana-input"
+            lang="ja"
+            placeholder="히라가나를 입력하세요"
+            autocomplete="off"
+          />
+        </div>
+
+        <!-- 히라가나 타일 선택 입력 영역 -->
+        <div id="subjTileInputWrap" class="subj-input-section" data-input-section="tiles">
+          <div class="tile-header-row">
+            <span class="field-label">히라가나 타일 선택(순서대로 클릭)</span>
+            <div class="tile-action-group">
+              <button id="subjBackspaceBtn" type="button" class="mini-btn" data-tile-action="backspace">⌫ 한 글자 지우기</button>
+              <button id="subjClearTilesBtn" type="button" class="mini-btn" data-tile-action="clear">전체 초기화</button>
+            </div>
+          </div>
+          <div id="subjSelectedTray" class="kana-tray" lang="ja" data-field="tray"></div>
+          <div id="subjKanaTilesGrid" class="kana-tiles-grid" data-field="tiles"></div>
+        </div>
+
+        <div class="quiz-footer-actions">
+          <button id="subjSubmitBtn" type="button" class="action-btn primary" data-subj-action="submit">채점하기</button>
+          <button id="subjNextBtn" type="button" class="action-btn primary" data-subj-action="next" hidden>다음 문제 →</button>
+          <button id="subjQuitBtn" type="button" class="action-btn" data-subj-action="quit">설정으로 돌아가기</button>
+        </div>
+
+        <div id="subjFeedbackBox" class="feedback-box" role="status" aria-live="polite" hidden></div>
+      </div>
     </section>
 
-    <!-- 6. 오답노트 -->
-    <section id="panel-wrongnote" class="tab-panel hidden">
-      <div class="panel-card">
-        <div class="filter-toolbar">
-          <div>
-            <h2 class="section-heading">오답노트</h2>
-            <p class="muted-text">퀴즈·주관식에서 틀린 단어의 누적 오답 횟수와 최근 틀린 유형·입력을 기록합니다.</p>
-          </div>
-          <div class="button-row">
-            <button id="retryWrongQuizBtn" type="button" class="btn btn-primary">틀린 단어 4지선다 복습</button>
-            <button id="retryWrongSubjBtn" type="button" class="btn">틀린 단어 주관식 복습</button>
-            <button id="clearWrongNoteBtn" type="button" class="btn btn-danger">오답 기록 비우기</button>
-          </div>
+    <!-- ===================================================================== -->
+    <!-- 6. 오답노트 탭                                                        -->
+    <!-- ===================================================================== -->
+    <section
+      id="panel-wrongnote"
+      class="tab-panel"
+      role="tabpanel"
+      aria-labelledby="tab-wrongnote"
+      data-tab-panel="wrongnote"
+      hidden
+    >
+      <div id="wrongNoteHeaderCard" class="surface-card">
+        <div class="section-header">
+          <h2 class="section-title">오답노트</h2>
+          <span class="section-subtitle">퀴즈·주관식에서 틀린 단어가 자동 기록되며 누적 오답 횟수를 확인할 수 있습니다.</span>
+        </div>
+        <div class="button-group">
+          <button id="retryWrongMcqBtn" type="button" class="action-btn primary" data-wrong-action="retry-mcq">
+            오답 단어 4지선다 재도전
+          </button>
+          <button id="retryWrongSubjBtn" type="button" class="action-btn" data-wrong-action="retry-subj">
+            오답 단어 주관식 재도전
+          </button>
+          <button id="clearWrongLogsBtn" type="button" class="action-btn danger" data-wrong-action="clear-all">
+            오답 기록 전체 삭제
+          </button>
         </div>
       </div>
-      <div id="wrongNoteTableWrap" class="panel-card"></div>
+
+      <div id="wrongNoteListWrap" class="surface-card" aria-live="polite"></div>
     </section>
 
-    <!-- 7. 사용방법 -->
-    <section id="panel-guide" class="tab-panel hidden">
-      <div class="panel-card">
-        <h2 class="section-heading">사용방법 및 학습 규칙 안내</h2>
+    <!-- ===================================================================== -->
+    <!-- 7. 사용방법 탭                                                        -->
+    <!-- ===================================================================== -->
+    <section
+      id="panel-guide"
+      class="tab-panel"
+      role="tabpanel"
+      aria-labelledby="tab-guide"
+      data-tab-panel="guide"
+      hidden
+    >
+      <div class="surface-card">
+        <h2 class="section-title">탭별 기능 안내</h2>
         <ul class="guide-list">
-          <li><strong>대시보드</strong>: 전체 어휘 수, 외움, 헷갈림, 미암기, 즐겨찾기, 누적 오답 수를 확인하고 카드 클릭으로 해당 필터 화면에 바로 이동할 수 있습니다. 커스텀 단어장 생성과 JSON 백업·복원·초기화를 제공합니다.</li>
-          <li><strong>단어장 &amp; 플래시카드</strong>: 분류·품사·암기 상태·단어장 필터 및 정렬을 지원하며, 중복 등장 단어는 <code>n년·n년도 중복 기출</code> 형태로 합쳐 표시합니다. 품사 메모 수정, 3단계 암기 상태(<code>외움</code>/<code>헷갈림</code>/<code>미암기</code>), 체크박스 다중 선택 후 새 단어장 저장, 플래시카드 셔플 및 예문 읽기/해석 토글을 사용할 수 있습니다.</li>
-          <li><strong>4지선다 퀴즈 &amp; 주관식 테스트</strong>: 범위·문항 수·셔플을 설정해 풀 수 있습니다. 주관식에서는 히라가나 직접 입력과 타일 선택을 지원하며, <strong>표기가 히라가나로만 이루어진 단어(예외 규칙)</strong>는 한글 뜻을 제시하고 히라가나를 직접 입력하거나 타일을 눌러 맞히는 방식으로 자동 전환됩니다.</li>
-          <li><strong>오답노트</strong>: 틀린 단어별 누적 오답 횟수와 최근 유형·입력 기록을 보여주고, 틀린 단어만 다시 풀거나 복습 완료 처리할 수 있습니다.</li>
+          <li><strong>대시보드</strong>: 전체 어휘 수, 외움·헷갈림·미암기 수, 즐겨찾기 수, 누적 오답 수를 한눈에 보고 클릭해 해당 목록/복습으로 이동합니다. 커스텀 단어장 생성과 데이터 백업·복원·초기화를 지원합니다.</li>
+          <li><strong>단어장</strong>: 기출 연도/분류·품사·암기 상태·단어장 필터 및 정렬을 제공합니다. 중복 단어가 여러 연도·분류에 등장한 경우 <code>n년·n년도 중복 기출</code>로 표기하며, 품사 메모 수정, 3단계 암기 상태 변경, 체크박스 다중 선택 후 새 단어장 저장, 즐겨찾기 모아보기가 가능합니다.</li>
+          <li><strong>플래시카드</strong>: 셔플과 앞면 표기/읽기, 뒷면 품사 및 예문 1개(예문 읽기·해석 토글 및 전역 가림 연동), 3단계 암기 상태 변경, 체크박스 다중 선택 후 새 단어장 저장, 일본어 TTS 재생을 지원합니다.</li>
+          <li><strong>4지선다 퀴즈</strong>: 출제 문항 수와 범위(전체·즐겨찾기·커스텀 단어장·암기 상태) 및 셔플을 설정해 어휘 자료 기반 문항과 오답 보기로 실전 연습을 할 수 있습니다.</li>
+          <li><strong>주관식 테스트</strong>: 출제 범위·문항 수·셔플·뜻 숨김·첫글자 힌트를 설정하고 히라가나 직접 입력 또는 타일 순서 클릭(한 글자 지우기/전체 초기화)으로 답합니다.</li>
+          <li><strong>오답노트</strong>: 틀린 단어 자동 기록, 단어별 누적 오답 횟수 확인, 전역 가림 연동, 오답 단어만 재도전 및 복습 완료 처리를 제공합니다.</li>
         </ul>
       </div>
 
-      <div class="panel-card">
-        <h2 class="section-heading">전역 단축키 표</h2>
-        <table class="data-table">
+      <div class="surface-card">
+        <h2 class="section-title">전역 가림 · 히라가나 전용 단어 예외 규칙 · 데이터 관리</h2>
+        <ul class="guide-list">
+          <li><strong>전역 가림 연동</strong>: 상단 툴바의 <em>전체 읽기 가림</em>과 <em>전체 뜻 가림</em> 토글은 단어장, 플래시카드, 오답노트 등 학습 화면의 읽기·뜻 표시에 연동됩니다.</li>
+          <li><strong>히라가나 전용 단어 예외 규칙</strong>: 표기가 히라가나로만 된 단어는 주관식 테스트에서 한글 뜻을 제시하고 히라가나 직접 입력 또는 히라가나 타일 순서 선택으로 출제됩니다.</li>
+          <li><strong>데이터 관리</strong>: 학습 상태와 커스텀 단어장, 오답 기록은 브라우저 저장소에 유지되며 JSON 파일로 백업·복원하거나 전체 초기화할 수 있습니다.</li>
+        </ul>
+      </div>
+
+      <div class="surface-card">
+        <h2 class="section-title">전체 단축키 표</h2>
+        <table class="guide-table">
           <thead>
-            <tr><th>단축키</th><th>동작</th><th>적용 범위</th></tr>
+            <tr>
+              <th>단축키</th>
+              <th>동작</th>
+              <th>적용 범위</th>
+            </tr>
           </thead>
           <tbody>
-            <tr><td><code>Space</code> / <code>Enter</code></td><td>플래시카드 뒤집기</td><td>플래시카드 탭</td></tr>
-            <tr><td><code>ArrowLeft</code> / <code>ArrowRight</code></td><td>이전 / 다음 카드 이동</td><td>플래시카드 탭</td></tr>
-            <tr><td><code>R</code></td><td>일본어 TTS 발음 재생</td><td>단어장 · 플래시카드 · 퀴즈 · 주관식</td></tr>
-            <tr><td><code>S</code></td><td>현재 카드 즐겨찾기 토글</td><td>플래시카드 탭</td></tr>
-            <tr><td><code>1</code> / <code>2</code> / <code>3</code></td><td>외움(1) · 헷갈림(2) · 미암기(3) 변경</td><td>플래시카드 탭</td></tr>
-            <tr><td><code>/</code></td><td>단어장 검색창 포커스</td><td>전역</td></tr>
-            <tr><td><code>?</code></td><td>단축키 안내 모달 열기/닫기</td><td>전역</td></tr>
+            <tr><td><kbd>Space</kbd> / <kbd>Enter</kbd></td><td>플래시카드 앞·뒷면 뒤집기</td><td>플래시카드 탭</td></tr>
+            <tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>이전 / 다음 플래시카드 이동</td><td>플래시카드 탭</td></tr>
+            <tr><td><kbd>R</kbd></td><td>일본어 TTS 발음 재생</td><td>단어장 · 플래시카드 · 퀴즈 · 주관식</td></tr>
+            <tr><td><kbd>S</kbd></td><td>현재 카드 즐겨찾기 토글</td><td>플래시카드 탭</td></tr>
+            <tr><td><kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd></td><td>외움(1) · 헷갈림(2) · 미암기(3) 변경</td><td>플래시카드 탭</td></tr>
+            <tr><td><kbd>/</kbd></td><td>단어장 검색창 포커스</td><td>전역</td></tr>
+            <tr><td><kbd>?</kbd></td><td>단축키 안내 모달 열기/닫기</td><td>전역</td></tr>
           </tbody>
         </table>
       </div>
     </section>
   </main>
 
-  <!-- 단축키 모달 -->
-  <div id="shortcutModalBackdrop" class="modal-backdrop" aria-hidden="true">
-    <div class="modal-dialog">
+  <!-- 단축키 안내 모달/팝업 -->
+  <div id="shortcutModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="shortcutModalTitle" hidden>
+    <div class="modal-panel" data-modal-panel="true">
       <div class="modal-header">
-        <h2 class="section-heading">⌨️ 전역 단축키 안내</h2>
-        <button id="shortcutModalCloseBtn" type="button" class="btn">✕</button>
+        <h2 id="shortcutModalTitle" class="section-title">⌨️ 전역 단축키 안내</h2>
+        <button id="closeShortcutModalBtn" type="button" class="icon-btn" data-modal-close="shortcutModal" aria-label="단축키 안내 닫기">✕</button>
       </div>
-      <p class="muted-text">입력창(<code>input</code>, <code>textarea</code>, <code>select</code>)에 포커스가 있을 때는 단축키가 동작하지 않습니다.</p>
-      <table class="data-table">
-        <thead><tr><th>키</th><th>기능</th></tr></thead>
+      <p class="helper-note">입력 필드(<code>input</code>, <code>textarea</code>, <code>select</code>)에 포커스가 있을 때는 단축키 충돌을 방지합니다.</p>
+      <table class="guide-table">
+        <thead>
+          <tr>
+            <th>단축키</th>
+            <th>동작</th>
+          </tr>
+        </thead>
         <tbody>
-          <tr><td><code>Space</code></td><td>플래시카드 앞·뒷면 뒤집기</td></tr>
-          <tr><td><code>←</code> / <code>→</code></td><td>이전 / 다음 플래시카드</td></tr>
-          <tr><td><code>R</code></td><td>일본어 TTS 발음 재생</td></tr>
-          <tr><td><code>S</code></td><td>즐겨찾기 토글</td></tr>
-          <tr><td><code>1</code> · <code>2</code> · <code>3</code></td><td>외움 · 헷갈림 · 미암기 상태 변경</td></tr>
-          <tr><td><code>/</code></td><td>단어장 검색창 이동</td></tr>
-          <tr><td><code>?</code></td><td>단축키 모달 토글</td></tr>
+          <tr><td><kbd>Space</kbd></td><td>플래시카드 뒤집기</td></tr>
+          <tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>이전 / 다음 카드</td></tr>
+          <tr><td><kbd>R</kbd></td><td>TTS 발음 재생</td></tr>
+          <tr><td><kbd>S</kbd></td><td>즐겨찾기 토글</td></tr>
+          <tr><td><kbd>1</kbd> · <kbd>2</kbd> · <kbd>3</kbd></td><td>외움 · 헷갈림 · 미암기</td></tr>
+          <tr><td><kbd>/</kbd></td><td>단어장 검색 이동</td></tr>
+          <tr><td><kbd>?</kbd></td><td>단축키 모달 열기/닫기</td></tr>
         </tbody>
       </table>
     </div>
   </div>
 
-  <script src="data.js"></script>
-  <script src="study.js"></script>
-  <script src="quiz.js"></script>
+  <!-- 모듈 스크립트 로드 순서: data.js -> study.js -> quiz.js -->
+  <script src="data.js" defer></script>
+  <script src="study.js" defer></script>
+  <script src="quiz.js" defer></script>
 </body>
 </html>
