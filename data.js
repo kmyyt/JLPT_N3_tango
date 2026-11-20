@@ -1,901 +1,1342 @@
 // =========================================================================
-// 일본어 어휘 데이터 및 중복 기출 병합 / 저장 / 백업 / 초기화 모듈
+// 3단계: data.js — 어휘 데이터, 중복 기출 병합, 히라가나 판별, 저장/백업/복원
+// - index.html 및 style.css와 연동되는 전역 데이터·스토어 모듈
 // =========================================================================
 
+/**
+ * 확인문제 섹션(기출어휘/예상어휘 확인문제)을 제외하고,
+ * 년도별 기출(한자읽기·표기·문맥구성·유의표현·용법) 및
+ * 2장 예상 어휘공략하기(명사·동사·い/な형용사·부사·외래어·유의어 등)를 중심으로 구성한 샘플 어휘 목록
+ * (스캔 표기 오류 薬局(やっきょく) 등은 표준 신자체·현대 가나 표기로 정규화)
+ */
 const RAW_VOCAB_ITEMS = [
-  // [문제 1: 한자읽기]
-  { word: "選手", reading: "せんしゅ", meaning: "선수", pos: "명사", years: ["한자읽기"], example: "新しい選手がチームに入った。", exampleReading: "あたらしいせんしゅがちーむにはいった。", exampleMeaning: "새로운 선수가 팀에 들어갔다." },
-  { word: "未来", reading: "みらい", meaning: "미래", pos: "명사", years: ["한자읽기", "용법"], example: "未来の技術を学ぶ。", exampleReading: "みらいのぎじゅつをまなぶ。", exampleMeaning: "미래의 기술을 배운다." },
-  { word: "印象", reading: "いんしょう", meaning: "인상", pos: "명사", years: ["한자읽기", "표기"], example: "強い印象が残った。", exampleReading: "つよいしょうがのこった。", exampleMeaning: "강한 인상이 남았다." },
-  { word: "逃げる", reading: "にげる", meaning: "도망치다", pos: "동사", years: ["한자읽기", "표기"], example: "安全な場所へ逃げる。", exampleReading: "あんぜんなばしょへにげる。", exampleMeaning: "안전한 곳으로 도망친다." },
-  { word: "焼く", reading: "やく", meaning: "굽다, 태우다", pos: "동사", years: ["한자읽기"], example: "パンを焼いて食べる。", exampleReading: "ぱんをやいてたべる。", exampleMeaning: "빵을 구워 먹는다." },
-  { word: "解く", reading: "とく", meaning: "풀다", pos: "동사", years: ["한자읽기", "표기"], example: "問題を解く。", exampleReading: "もんだいをとく。", exampleMeaning: "문제를 푼다." },
-  { word: "負ける", reading: "まける", meaning: "지다", pos: "동사", years: ["한자읽기"], example: "試合に負ける。", exampleReading: "しあいにまける。", exampleMeaning: "시합에 진다." },
-  { word: "通知", reading: "つうち", meaning: "통지", pos: "명사·동사", years: ["한자읽기"], example: "結果を通知する。", exampleReading: "けっかを つうちする。", exampleMeaning: "결과를 통지한다." },
-  { word: "退院", reading: "たいいん", meaning: "퇴원", pos: "명사·동사", years: ["한자읽기"], example: "明日退院する。", exampleReading: "あしたたいいんする。", exampleMeaning: "내일 퇴원한다." },
-  { word: "産業", reading: "さんぎょう", meaning: "산업", pos: "명사", years: ["한자읽기"], example: "地域の産業を支える。", exampleReading: "ちいきのさんぎょうをささえる。", exampleMeaning: "지역 산업을 지탱한다." },
-  { word: "悲しそう", reading: "かなしそう", meaning: "슬퍼 보임", pos: "형용사", years: ["한자읽기"], example: "彼女は悲しそうだ。", exampleReading: "かのじょはかなしそうだ。", exampleMeaning: "그녀는 슬퍼 보인다." },
-  { word: "適当", reading: "てきとう", meaning: "적당함", pos: "형용사·명사", years: ["한자읽기"], example: "適当な長さに切る。", exampleReading: "てきとうなながさにきる。", exampleMeaning: "적당한 길이로 자른다." },
-  { word: "残す", reading: "のこす", meaning: "남기다", pos: "동사", years: ["한자읽기"], example: "メモを残す。", exampleReading: "めもをのこす。", exampleMeaning: "메모를 남긴다." },
-  { word: "角", reading: "かど", meaning: "모퉁이, 뿔", pos: "명사", years: ["한자읽기"], example: "角を曲がる。", exampleReading: "かどをまがる。", exampleMeaning: "모퉁이를 돈다." },
-  { word: "比べ", reading: "くらべ", meaning: "비교", pos: "명사·동사", years: ["한자읽기"], example: "去年と比べられない。", exampleReading: "きょねんにくらべられない。", exampleMeaning: "작년과 비교할 수 없다." },
-  { word: "採用", reading: "さいよう", meaning: "채용", pos: "명사·동사", years: ["한자읽기"], example: "新しい案を採用する。", exampleReading: "あたらしいあんをさいようする。", exampleMeaning: "새로운 안을 채용한다." },
-  { word: "他人", reading: "たにん", meaning: "타인, 남", pos: "명사", years: ["한자읽기"], example: "他人の話を聞く。", exampleReading: "たにんのはなしをきく。", exampleMeaning: "남의 이야기를 듣는다." },
-  { word: "解ける", reading: "とける", meaning: "풀리다", pos: "동사", years: ["한자읽기"], example: "謎が解ける。", exampleReading: "なぞがとける。", exampleMeaning: "수수께끼가 풀린다." },
-  { word: "聞く", reading: "きく", meaning: "듣다, 묻다", pos: "동사", years: ["한자읽기"], example: "音楽を聞く。", exampleReading: "おんがくをきく。", exampleMeaning: "음악을 듣는다." },
-  { word: "調べる", reading: "しらべる", meaning: "조사하다", pos: "동사", years: ["한자읽기"], example: "意味を調べる。", exampleReading: "いみをしらべる。", exampleMeaning: "뜻을 조사한다." },
-  { word: "助ける", reading: "たすける", meaning: "돕다, 구하다", pos: "동사", years: ["한자읽기"], example: "友達を助ける。", exampleReading: "ともだちをたすける。", exampleMeaning: "친구를 돕는다." },
-  { word: "過去", reading: "かこ", meaning: "과거", pos: "명사", years: ["한자읽기", "표기"], example: "過去の記録を見る。", exampleReading: "かこのきろくをみる。", exampleMeaning: "과거 기록을 본다." },
-  { word: "予約", reading: "よやく", meaning: "예약", pos: "명사·동사", years: ["한자읽기"], example: "席を予約する。", exampleReading: "せきをよやくする。", exampleMeaning: "좌석을 예약한다." },
-  { word: "若い", reading: "わかい", meaning: "젊다, 어리다", pos: "형용사", years: ["한자읽기"], example: "若い世代が増える。", exampleReading: "わかいせだいがふえる。", exampleMeaning: "젊은 세대가 늘어난다." },
-  { word: "遊ぶ", reading: "あそぶ", meaning: "놀다", pos: "동사", years: ["한자읽기"], example: "公園で遊ぶ。", exampleReading: "こうえんであそぶ。", exampleMeaning: "공원에서 논다." },
-  { word: "疑う", reading: "うたがう", meaning: "의심하다", pos: "동사", years: ["한자읽기"], example: "相手の言葉を疑う。", exampleReading: "あいてのことばをうたがう。", exampleMeaning: "상대방의 말을 의심한다." },
-  { word: "機械", reading: "きかい", meaning: "기계", pos: "명사", years: ["한자읽기"], example: "新しい機械を使う。", exampleReading: "あたらしいきかいをつかう。", exampleMeaning: "새 기계를 사용한다." },
-  { word: "確かだ", reading: "たしかだ", meaning: "확실하다", pos: "형용사", years: ["한자읽기"], example: "その情報は確かだ。", exampleReading: "そのじょうほうはたしかだ。", exampleMeaning: "그 정보는 확실하다." },
-  { word: "命令", reading: "めいれい", meaning: "명령", pos: "명사·동사", years: ["한자읽기"], example: "命令に従う。", exampleReading: "めいれいにしたがう。", exampleMeaning: "명령에 따른다." },
-  { word: "卒業", reading: "そつぎょう", meaning: "졸업", pos: "명사·동사", years: ["한자읽기"], example: "春に大学を卒業する。", exampleReading: "はるにだいがくをそつぎょうする。", exampleMeaning: "봄에 대학을 졸업한다." },
-  { word: "身分", reading: "みぶん", meaning: "신분", pos: "명사", years: ["한자읽기"], example: "身分を証明する。", exampleReading: "みぶんをしょうめいする。", exampleMeaning: "신분을 증명한다." },
-  { word: "伝える", reading: "つたえる", meaning: "전하다", pos: "동사", years: ["한자읽기"], example: "気持ちを伝える。", exampleReading: "きもちをつたえる。", exampleMeaning: "마음을 전한다." },
-  { word: "覚える", reading: "おぼえる", meaning: "외우다, 기억하다", pos: "동사", years: ["한자읽기"], example: "単語を覚える。", exampleReading: "たんごをおぼえる。", exampleMeaning: "단어를 외운다." },
-  { word: "検査", reading: "けんさ", meaning: "검사", pos: "명사·동사", years: ["한자읽기", "표기"], example: "健康検査を受ける。", exampleReading: "けんこうけんさをうける。", exampleMeaning: "건강 검사를 받는다." },
-  { word: "生える", reading: "はえる", meaning: "자라다, 나다", pos: "동사", years: ["한자읽기"], example: "芽が生える。", exampleReading: "めがはえる。", exampleMeaning: "싹이 난다." },
-  { word: "個人", reading: "こじん", meaning: "개인", pos: "명사", years: ["한자읽기"], example: "個人の意見を出す。", exampleReading: "こじんのいけんをだす。", exampleMeaning: "개인의 의견을 낸다." },
-  { word: "払う", reading: "はらう", meaning: "지불하다", pos: "동사", years: ["한자읽기"], example: "代金を払う。", exampleReading: "だいきんをはらう。", exampleMeaning: "대금을 지불한다." },
-  { word: "横断", reading: "おうだん", meaning: "횡단", pos: "명사·동사", years: ["한자읽기"], example: "道路を横断する。", exampleReading: "どうろをおうだんする。", exampleMeaning: "도로를 횡단한다." },
-  { word: "家具", reading: "かぐ", meaning: "가구", pos: "명사", years: ["한자읽기"], example: "部屋に家具を置く。", exampleReading: "へやにかぐをおく。", exampleMeaning: "방에 가구를 놓는다." },
-  { word: "加熱", reading: "かねつ", meaning: "가열", pos: "명사·동사", years: ["한자읽기"], example: "料理を加熱する。", exampleReading: "りょうりをかねつする。", exampleMeaning: "요리를 가열한다." },
-  { word: "朝刊", reading: "ちょうかん", meaning: "조간", pos: "명사", years: ["한자읽기"], example: "朝刊を読む。", exampleReading: "ちょうかんをよむ。", exampleMeaning: "조간을 읽는다." },
-  { word: "月末", reading: "げつまつ", meaning: "월말", pos: "명사", years: ["한자읽기"], example: "月末に支払う。", exampleReading: "げつまつにしはらう。", exampleMeaning: "월말에 지불한다." },
-  { word: "広場", reading: "ひろば", meaning: "광장", pos: "명사", years: ["한자읽기"], example: "広場で集まる。", exampleReading: "ひろばであつまる。", exampleMeaning: "광장에서 모인다." },
-  { word: "駐車", reading: "ちゅうしゃ", meaning: "주차", pos: "명사·동사", years: ["한자읽기", "표기"], example: "車を駐車する。", exampleReading: "くるまをちゅうしゃする。", exampleMeaning: "차를 주차한다." },
-  { word: "現在", reading: "げんざい", meaning: "현재", pos: "명사", years: ["한자읽기"], example: "現在の状況を確認する。", exampleReading: "げんざいのじょうきょうをかくにんする。", exampleMeaning: "현재 상황을 확인한다." },
-  { word: "複数", reading: "ふくすう", meaning: "복수, 여럿", pos: "명사", years: ["한자읽기"], example: "複数の方法がある。", exampleReading: "ふくすうのほうほうがある。", exampleMeaning: "여러 방법이 있다." },
-  { word: "基本", reading: "きほん", meaning: "기본", pos: "명사", years: ["한자읽기"], example: "基本を身につける。", exampleReading: "きほんをみにつける。", exampleMeaning: "기본을 익힌다." },
-  { word: "身長", reading: "しんちょう", meaning: "신장, 키", pos: "명사", years: ["한자읽기"], example: "身長を測る。", exampleReading: "しんちょうをはかる。", exampleMeaning: "키를 잰다." },
-  { word: "恋しい", reading: "こいしい", meaning: "그립다", pos: "형용사", years: ["한자읽기"], example: "故郷が恋しい。", exampleReading: "こきょうがこいしい。", exampleMeaning: "고향이 그립다." },
-  { word: "努力", reading: "どりょく", meaning: "노력", pos: "명사·동사", years: ["한자읽기"], example: "合格へ努力する。", exampleReading: "ごうかくへどりょくする。", exampleMeaning: "합격을 향해 노력한다." },
-  { word: "夕日", reading: "ゆうひ", meaning: "저녁노을", pos: "명사", years: ["한자읽기"], example: "きれいな夕日を見る。", exampleReading: "きれいなゆうひをみる。", exampleMeaning: "예쁜 저녁노을을 본다." },
-  { word: "感情的", reading: "かんじょうてき", meaning: "감정적", pos: "형용사", years: ["한자읽기"], example: "感情的にならない。", exampleReading: "かんじょうてきにならない。", exampleMeaning: "감정적이 되지 않는다." },
-  { word: "泣いて", reading: "ないて", meaning: "울며", pos: "동사", years: ["한자읽기", "표기"], example: "子どもが泣いて起きた。", exampleReading: "こどもがないておきた。", exampleMeaning: "아이가 울며 일어났다." },
-  { word: "郵便", reading: "ゆうびん", meaning: "우편", pos: "명사", years: ["한자읽기"], example: "郵便を出す。", exampleReading: "ゆうびんをだす。", exampleMeaning: "우편을 부친다." },
-  { word: "名物", reading: "めいぶつ", meaning: "명물", pos: "명사", years: ["한자읽기"], example: "町の有名な名物だ。", exampleReading: "まちのゆうめいなめいぶつだ。", exampleMeaning: "마을의 유명한 명물이다." },
-  { word: "容器", reading: "ようき", meaning: "용기", pos: "명사", years: ["한자읽기"], example: "保存用の容器に入れる。", exampleReading: "ほぞんようのようきにいれる。", exampleMeaning: "보관용 용기에 넣는다." },
-  { word: "最初", reading: "さいしょ", meaning: "최초, 처음", pos: "명사", years: ["한자읽기", "표기"], example: "最初からやり直す。", exampleReading: "さいしょからやりなおす。", exampleMeaning: "처음부터 다시 한다." },
-  { word: "石油", reading: "せきゆ", meaning: "석유", pos: "명사", years: ["한자읽기"], example: "石油の価格が変わる。", exampleReading: "せきゆのかかくがかわる。", exampleMeaning: "석유 가격이 바뀐다." },
-  { word: "動作", reading: "どうさ", meaning: "동작", pos: "명사", years: ["한자읽기"], example: "機械の動作を確認する。", exampleReading: "きかいのどうさをかくにんする。", exampleMeaning: "기계 동작을 확인한다." },
-  { word: "小型", reading: "こがた", meaning: "소형", pos: "명사·형용사", years: ["한자읽기"], example: "小型のカメラを持つ。", exampleReading: "こがたのかめらをもつ。", exampleMeaning: "소형 카메라를 가진다." },
-  { word: "断った", reading: "ことわった", meaning: "거절했다", pos: "동사", years: ["한자읽기"], example: "誘いを断った。", exampleReading: "さそいをことわった。", exampleMeaning: "권유를 거절했다." },
-  { word: "終点", reading: "しゅうてん", meaning: "종점", pos: "명사", years: ["한자읽기"], example: "電車は終点に着いた。", exampleReading: "でんしゃはしゅうてんについた。", exampleMeaning: "전철은 종점에 도착했다." },
-  { word: "薬局", reading: "やっきょく", meaning: "약국", pos: "명사", years: ["한자읽기"], example: "駅前の薬局へ行く。", exampleReading: "えきまえのやっきょくへいく。", exampleMeaning: "역 앞 약국에 간다." },
-  { word: "各駅", reading: "かくえき", meaning: "각역", pos: "명사", years: ["한자읽기"], example: "各駅停車に乗る。", exampleReading: "かくえきていしゃにのる。", exampleMeaning: "각역정차에 탄다." },
-  { word: "改札", reading: "かいさつ", meaning: "개찰", pos: "명사·동사", years: ["한자읽기"], example: "改札口で待つ。", exampleReading: "かいさつぐちでまつ。", exampleMeaning: "개찰구에서 기다린다." },
-  { word: "割れる", reading: "われる", meaning: "깨지다", pos: "동사", years: ["한자읽기"], example: "コップが割れる。", exampleReading: "こっぷがわれる。", exampleMeaning: "컵이 깨진다." },
-  { word: "笑って", reading: "わらって", meaning: "웃으며", pos: "동사", years: ["한자읽기"], example: "みんなで笑って話した。", exampleReading: "みんなでわらってはなした。", exampleMeaning: "다 같이 웃으며 이야기했다." },
-  { word: "合図", reading: "あいず", meaning: "신호, 합図", pos: "명사·동사", years: ["한자읽기"], example: "合図でスタートする。", exampleReading: "あいずですたーとする。", exampleMeaning: "신호로 출발한다." },
-  { word: "応募", reading: "おうぼ", meaning: "응모", pos: "명사·동사", years: ["한자읽기"], example: "コンテストに応募する。", exampleReading: "こんてすとにおうぼする。", exampleMeaning: "콘테스트에 응모한다." },
-  { word: "相手", reading: "あいて", meaning: "상대", pos: "명사", years: ["한자읽기"], example: "話す相手を変える。", exampleReading: "はなすあいてをかえる。", exampleMeaning: "대화 상대를 바꾼다." },
-  { word: "疑った", reading: "うたがった", meaning: "의심했다", pos: "동사", years: ["한자읽기"], example: "最初はその話を疑った。", exampleReading: "さいしょはそのはなしをうたがった。", exampleMeaning: "처음엔 그 이야기를 의심했다." },
-  { word: "迎えて", reading: "むかえて", meaning: "맞이하며", pos: "동사", years: ["한자읽기"], example: "笑顔で迎えてくれた。", exampleReading: "えがおでむかえてくれた。", exampleMeaning: "웃는 얼굴로 맞이해 주었다." },
-  { word: "事情", reading: "じじょう", meaning: "사정", pos: "명사", years: ["한자읽기"], example: "詳しい事情を説明する。", exampleReading: "くわしいじじょうをせつめいする。", exampleMeaning: "자세한 사정을 설명한다." },
-  { word: "汗", reading: "あせ", meaning: "땀", pos: "명사", years: ["한자읽기", "문맥구성"], example: "運動して汗をかく。", exampleReading: "うんどうをしてあせをかく。", exampleMeaning: "운동해서 땀을 흘린다." },
-  { word: "疑問", reading: "ぎもん", meaning: "의문", pos: "명사", years: ["한자읽기"], example: "疑問を解決する。", exampleReading: "ぎもんをかいけつする。", exampleMeaning: "의문을 해결한다." },
-  { word: "順番", reading: "じゅんばん", meaning: "순번, 차례", pos: "명사", years: ["한자읽기"], example: "順番に並ぶ。", exampleReading: "じゅんばんにならぶ。", exampleMeaning: "차례대로 줄을 선다." },
-  { word: "種類", reading: "しゅるい", meaning: "종류", pos: "명사", years: ["한자읽기"], example: "いろいろな種類がある。", exampleReading: "いろいろなしゅるいがある。", exampleMeaning: "여러 종류가 있다." },
-  { word: "方向", reading: "ほうこう", meaning: "방향", pos: "명사", years: ["한자읽기", "표기"], example: "北の方向へ進む。", exampleReading: "きたのほうこうへすすむ。", exampleMeaning: "북쪽 방향으로 나아간다." },
-  { word: "血液", reading: "けつえき", meaning: "혈액", pos: "명사", years: ["한자읽기", "표기"], example: "血液を調べる。", exampleReading: "けつえきをしらべる。", exampleMeaning: "혈액을 조사한다." },
-  { word: "提出", reading: "ていしゅつ", meaning: "제출", pos: "명사·동사", years: ["한자읽기"], example: "レポートを提出する。", exampleReading: "れぽーとていしゅつする。", exampleMeaning: "리포트를 제출한다." },
-  { word: "単語", reading: "たんご", meaning: "단어", pos: "명사", years: ["한자읽기"], example: "新しい単語を調べる。", exampleReading: "あたらしいたんごをしらべる。", exampleMeaning: "새 단어를 조사한다." },
-  { word: "交流", reading: "こうりゅう", meaning: "교류", pos: "명사·동사", years: ["한자읽기", "용법"], example: "文化交流をする。", exampleReading: "ぶんかこうりゅうをする。", exampleMeaning: "문화 교류를 한다." },
-  { word: "実力", reading: "じつりょく", meaning: "실력", pos: "명사", years: ["한자읽기"], example: "実力を発揮する。", exampleReading: "じつりょくをはっきする。", exampleMeaning: "실력을 발휘한다." },
-  { word: "勝った", reading: "かった", meaning: "이겼다", pos: "동사", years: ["한자읽기"], example: "今日の試合に勝った。", exampleReading: "きょうのしあいにかった。", exampleMeaning: "오늘 시합에 이겼다." },
-  { word: "苦労", reading: "くろう", meaning: "고생", pos: "명사·동사", years: ["한자읽기"], example: "準備で苦労した。", exampleReading: "じゅんびでくろうした。", exampleMeaning: "준비하느라 고생했다." },
-  { word: "位置", reading: "いち", meaning: "위치", pos: "명사", years: ["한자읽기"], example: "机の位置を変える。", exampleReading: "つくえのいちをかえる。", exampleMeaning: "책상 위치를 바꾼다." },
-  { word: "留守", reading: "るす", meaning: "부재, 외출 중", pos: "명사", years: ["한자읽기"], example: "午後は留守にする。", exampleReading: "ごごはるすにする。", exampleMeaning: "오후에는 비운다." },
-  { word: "包んで", reading: "つつんで", meaning: "싸서", pos: "동사", years: ["한자읽기", "문맥구성"], example: "紙で包んで渡す。", exampleReading: "かみでつつんでわたす。", exampleMeaning: "종이로 싸서 건넨다." },
-  { word: "一般的", reading: "いっぱんてき", meaning: "일반적", pos: "형용사", years: ["한자읽기"], example: "一般的な考え方だ。", exampleReading: "いっぱんてきなかんがえかただ。", exampleMeaning: "일반적인 사고방식이다." },
-  { word: "交通", reading: "こうつう", meaning: "교통", pos: "명사", years: ["한자읽기"], example: "交通ルールを守る。", exampleReading: "こうつうるーるをまもる。", exampleMeaning: "교통 규칙을 지킨다." },
-  { word: "想像", reading: "そうぞう", meaning: "상상", pos: "명사·동사", years: ["한자읽기"], example: "未来を想像する。", exampleReading: "みらいをそうぞうする。", exampleMeaning: "미래를 상상한다." },
-  { word: "首都", reading: "しゅと", meaning: "수도", pos: "명사", years: ["한자읽기"], example: "国の首都を訪ねる。", exampleReading: "くにのしゅとをおとずねる。", exampleMeaning: "나라의 수도를 방문한다." },
-  { word: "調査", reading: "ちょうさ", meaning: "조사", pos: "명사·동사", years: ["한자읽기"], example: "アンケートで調査する。", exampleReading: "あんけーとでちょうさする。", exampleMeaning: "설문으로 조사한다." },
-  { word: "浅い", reading: "あさい", meaning: "얕다", pos: "형용사", years: ["한자읽기"], example: "水が浅い川だ。", exampleReading: "みずがあさいかわだ。", exampleMeaning: "물이 얕은 강이다." },
-  { word: "固くて", reading: "かたくて", meaning: "단단해서", pos: "형용사", years: ["한자읽기"], example: "パンが固くて噛めない。", exampleReading: "ぱんがかたくてかめない。", exampleMeaning: "빵이 딱딱해서 씹을 수 없다." },
-  { word: "得意", reading: "とくい", meaning: "특기,得意", pos: "형용사·명사", years: ["한자읽기"], example: "料理が得意だ。", exampleReading: "りょうりがとくいだ。", exampleMeaning: "요리에 자신이 있다." },
-  { word: "遅れる", reading: "おくれる", meaning: "늦다", pos: "동사", years: ["한자읽기"], example: "電車が遅れる。", exampleReading: "でんしゃがおくれる。", exampleMeaning: "전철이 늦는다." },
+  // [2025년 기출]
+  {
+    word: "選手",
+    reading: "せんしゅ",
+    meaning: "선수",
+    pos: "명사",
+    years: ["2025년 기출(한자읽기)"],
+    example: "新しい選手がチームに入りました。",
+    exampleReading: "あたらしいせんしゅがちーむにはいりました。",
+    exampleMeaning: "새로운 선수가 팀에 들어왔습니다."
+  },
+  {
+    word: "未来",
+    reading: "みらい",
+    meaning: "미래",
+    pos: "명사",
+    years: ["2025년 기출(한자읽기)", "2010년 기출(용법)"],
+    example: "未来には人間は月に住むようになるかもしれない。",
+    exampleReading: "みらいにはにんげんはつきにすむようになるかもしれない。",
+    exampleMeaning: "미래에는 인간이 달에 살게 될지도 모릅니다."
+  },
+  {
+    word: "印象",
+    reading: "いんしょう",
+    meaning: "인상",
+    pos: "명사",
+    years: ["2025년 기출(한자읽기)"],
+    example: "彼の明るい笑顔が印象に残った。",
+    exampleReading: "かれのあかるいえがおがいんしょうにのこった。",
+    exampleMeaning: "그의 밝은 미소가 인상에 남았습니다."
+  },
+  {
+    word: "逃げる",
+    reading: "にげる",
+    meaning: "도망치다, 피하다",
+    pos: "동사(일어·자동사)",
+    years: ["2025년 기출(한자읽기)"],
+    example: "安全な場所へ逃げてください。",
+    exampleReading: "あんぜんなばしょへにげてください。",
+    exampleMeaning: "안전한 곳으로 도망쳐 주세요."
+  },
+  {
+    word: "焼く",
+    reading: "やく",
+    meaning: "굽다, 태우다",
+    pos: "동사(오단·타동사)",
+    years: ["2025년 기출(한자읽기)"],
+    example: "パンを焼いて朝ごはんを食べます。",
+    exampleReading: "ぱんをやいてあさごはんをたべます。",
+    exampleMeaning: "빵을 구워서 아침밥을 먹습니다."
+  },
+  {
+    word: "解く",
+    reading: "とく",
+    meaning: "풀다(문제·매듭 등)",
+    pos: "동사(오단·타동사)",
+    years: ["2025년 기출(한자읽기)"],
+    example: "靴ひもを解いて靴を脱いだ。",
+    exampleReading: "くつひもをといてくつをぬいだ。",
+    exampleMeaning: "신발끈을 풀고 신발을 벗었습니다."
+  },
+  {
+    word: "負ける",
+    reading: "まける",
+    meaning: "지다, 패배하다",
+    pos: "동사(일어·자동사)",
+    years: ["2025년 기출(한자읽기)"],
+    example: "最後の試合で惜しくも負けてしまった。",
+    exampleReading: "さいごのしあいでおしくもまけてしまった。",
+    exampleMeaning: "마지막 시합에서 아쉽게도 져 버렸습니다."
+  },
+  {
+    word: "通知",
+    reading: "つうち",
+    meaning: "통지, 알림",
+    pos: "명사·동사",
+    years: ["2025년 기출(한자읽기)"],
+    example: "合格の通知がメールで届いた。",
+    exampleReading: "ごうかくのつうちがめーるでとどいた。",
+    exampleMeaning: "합격 통지가 메일로 도착했습니다."
+  },
+  {
+    word: "退院",
+    reading: "たいいん",
+    meaning: "퇴원",
+    pos: "명사·동사",
+    years: ["2025년 기출(한자읽기)"],
+    example: "祖父は来週の月曜日に退院する予定だ。",
+    exampleReading: "そふはらいしゅうのげつようびにかいんするよていだ。",
+    exampleMeaning: "할아버지는 다음 주 월요일에 퇴원하실 예정입니다."
+  },
+  {
+    word: "産業",
+    reading: "さんぎょう",
+    meaning: "산업",
+    pos: "명사",
+    years: ["2025년 기출(한자읽기)"],
+    example: "この地域は観光産業が盛んだ。",
+    exampleReading: "このちいきはかんこうさんぎょうがさかんだ。",
+    exampleMeaning: "이 지역은 관광 산업이 활발합니다."
+  },
+  {
+    word: "アナウンス",
+    reading: "あなうーんす",
+    meaning: "아나운스, 안내 방송",
+    pos: "명사·외래어",
+    years: ["2025년 기출(문맥구성)"],
+    example: "駅のアナウンスをよく聞いて電車に乗った。",
+    exampleReading: "えきのあなうーんすをよくきいてでんしゃにのった。",
+    exampleMeaning: "역 안내 방송을 잘 듣고 전철에 탔습니다."
+  },
+  {
+    word: "案外",
+    reading: "あんがい",
+    meaning: "의외로, 생각보다",
+    pos: "부사·な형용사",
+    years: ["2025년 기출(문맥구성)"],
+    example: "テストは難しそうだったが、案外簡単だった。",
+    exampleReading: "てすとはむずかしそうだったが、あんがいかんたんだった。",
+    exampleMeaning: "시험은 어려워 보였지만 의외로 쉬웠습니다."
+  },
+  {
+    word: "くやしい",
+    reading: "くやしい",
+    meaning: "분하다, 억울하다",
+    pos: "い형용사",
+    years: ["2025년 기출(문맥구성)"],
+    example: "あと少しで勝てたのに負けてくやしい。",
+    exampleReading: "あとすこしでかてたのにまけてくやしい。",
+    exampleMeaning: "조금만 더 하면 이길 수 있었는데 져서 분합니다."
+  },
+  {
+    word: "しかたない",
+    reading: "しかたない",
+    meaning: "어쩔 수 없다, 할 수 없다",
+    pos: "관용·표현",
+    years: ["2025년 기출(문맥구성)"],
+    example: "雨が降ってきたから、今日は散歩をあきらめるしかたない。",
+    exampleReading: "あめがふってきたから、きょうはさんぽをあきらめるしかたない。",
+    exampleMeaning: "비가 오기 시작했으니 오늘은 산책을 포기할 수밖에 없습니다."
+  },
+  {
+    word: "リスト",
+    reading: "りすと",
+    meaning: "리스트, 목록",
+    pos: "명사·외래어",
+    years: ["2025년 기출(문맥구성)"],
+    example: "買い物に行く前に必要なものリストを作った。",
+    exampleReading: "かいものにいくまえにひつようなものりすとをつくった。",
+    exampleMeaning: "장 보러 가기 전에 필요한 물건 목록을 만들었습니다."
+  },
+  {
+    word: "オーダー",
+    reading: "おーだー",
+    meaning: "주문, 오더",
+    pos: "명사·동사·외래어",
+    years: ["2025년 기출(용법)", "예상어휘(외래어)"],
+    example: "カフェでコーヒーとケーキをオーダーした。",
+    exampleReading: "かふぇでこーひーとけーきをおーだーした。",
+    exampleMeaning: "카페에서 커피와 케이크를 주문했습니다."
+  },
+  {
+    word: "なつかしい",
+    reading: "なつかしい",
+    meaning: "그립다, 정겹다",
+    pos: "い형용사",
+    years: ["2025년 기출(용법)", "2010년 기출(문맥구성)"],
+    example: "卒業アルバムを見て、高校時代がなつかしくなった。",
+    exampleReading: "そつぎょうあるばむをみて、こうこうじだいがなつかしくなった。",
+    exampleMeaning: "졸업 앨범을 보고 고등학교 시절이 그리워졌습니다."
+  },
+  {
+    word: "ばらばら",
+    reading: "ばらばら",
+    meaning: "제각각, 흩어짐, 산산조각",
+    pos: "부사·な형용사",
+    years: ["2025년 기출(용법)", "예상어휘(부사)"],
+    example: "意見がばらばらなので、もう一度話し合おう。",
+    exampleReading: "いけんがばらばらなので、もういちどはなしあおう。",
+    exampleMeaning: "의견이 제각각이니 한 번 더 이야기해 봅시다."
+  },
+  {
+    word: "変化",
+    reading: "へんか",
+    meaning: "변화",
+    pos: "명사·동사",
+    years: ["2025년 기출(용법)"],
+    example: "季節の変化に合わせて服装を変える。",
+    exampleReading: "きせつのへんかにあわせてふくそうをかえる。",
+    exampleMeaning: "계절 변화에 맞춰 옷차림을 바꿉니다."
+  },
 
-  // [문제 2: 표기]
-  { word: "大量", reading: "たいりょう", meaning: "대량", pos: "명사", years: ["표기"], example: "水を大量に用意する。", exampleReading: "みずをたいりょうによういする。", exampleMeaning: "물을 대량으로 준비한다." },
-  { word: "申し込み", reading: "もうしこみ", meaning: "신청, 등록", pos: "명사·동사", years: ["표기"], example: "申し込みは来週までだ。", exampleReading: "もうしこみはらいしゅうまでだ。", exampleMeaning: "신청은 다음 주까지다." },
-  { word: "集中", reading: "しゅうちゅう", meaning: "집중", pos: "명사·동사", years: ["표기"], example: "勉強に集中する。", exampleReading: "べんきょうにしゅうちゅうする。", exampleMeaning: "공부에 집중한다." },
-  { word: "失業", reading: "しつぎょう", meaning: "실업", pos: "명사·동사", years: ["표기"], example: "失業者が増える。", exampleReading: "しつぎょうしゃがふえる。", exampleMeaning: "실업자가 늘어난다." },
-  { word: "禁煙", reading: "きんえん", meaning: "금연", pos: "명사·동사", years: ["표기"], example: "建物内は禁煙だ。", exampleReading: "たてものないはきんえんだ。", exampleMeaning: "건물 내는 금연이다." },
-  { word: "会費", reading: "かいひ", meaning: "회비", pos: "명사", years: ["표기"], example: "会費を集める。", exampleReading: "かいひをあつめる。", exampleMeaning: "회비를 모은다." },
-  { word: "細かい", reading: "こまかい", meaning: "잘다, 세밀하다", pos: "형용사", years: ["표기"], example: "細かい点を確認する。", exampleReading: "こまかいてんをかくにんする。", exampleMeaning: "세세한 점을 확인한다." },
-  { word: "法律", reading: "ほうりつ", meaning: "법률", pos: "명사", years: ["표기"], example: "新しい法律ができる。", exampleReading: "あたらしいほうりつができる。", exampleMeaning: "새로운 법률이 생긴다." },
-  { word: "預ける", reading: "あずける", meaning: "맡기다", pos: "동사", years: ["표기", "용법"], example: "荷物を預ける。", exampleReading: "にもつをあずける。", exampleMeaning: "짐을 맡긴다." },
-  { word: "重ねて", reading: "かさねて", meaning: "겹쳐서, 거듭", pos: "동사", years: ["표기", "문맥구성"], example: "本を重ねて置く。", exampleReading: "ほんをかさねておく。", exampleMeaning: "책을 겹쳐 둔다." },
-  { word: "吸う", reading: "すう", meaning: "들이마시다, 피우다", pos: "동사", years: ["표기"], example: "空気を深く吸う。", exampleReading: "くうきをふかくすう。", exampleMeaning: "공기를 깊이 들이마신다." },
-  { word: "送信", reading: "そうしん", meaning: "송신", pos: "명사·동사", years: ["표기"], example: "メッセージを送信する。", exampleReading: "めっせーじをそうしんする。", exampleMeaning: "메시지를 송신한다." },
-  { word: "森林", reading: "しんりん", meaning: "삼림", pos: "명사", years: ["표기"], example: "森林を守る活動をする。", exampleReading: "しんりんをまもるかつどうをする。", exampleMeaning: "삼림을 지키는 활동을 한다." },
-  { word: "減りました", reading: "へりました", meaning: "줄어들었습니다", pos: "동사", years: ["표기"], example: "数が減りました。", exampleReading: "かずがへりました。", exampleMeaning: "수가 줄어들었습니다." },
-  { word: "周り", reading: "まわり", meaning: "주위, 둘레", pos: "명사", years: ["표기"], example: "駅の周りを歩く。", exampleReading: "えきのまわりをあるく。", exampleMeaning: "역 주변을 걷는다." },
-  { word: "笑顔", reading: "えがお", meaning: "웃는 얼굴", pos: "명사", years: ["표기"], example: "明るい笑顔で迎える。", exampleReading: "あかるいえがおでむかえる。", exampleMeaning: "밝은 미소로 맞이한다." },
-  { word: "泊まって", reading: "とまって", meaning: "묵어서", pos: "동사", years: ["표기"], example: "ホテルに泊まって休む。", exampleReading: "ほてるにとまってやすむ。", exampleMeaning: "호텔에 묵으며 쉰다." },
-  { word: "暖かい", reading: "あたたかい", meaning: "따뜻하다", pos: "형용사", years: ["표기"], example: "暖かい日が続く。", exampleReading: "あたたかいひがつづく。", exampleMeaning: "따뜻한 날이 이어진다." },
-  { word: "車道", reading: "しゃどう", meaning: "차도", pos: "명사", years: ["표기"], example: "車道に気をつける。", exampleReading: "しゃどうにきをつける。", exampleMeaning: "차도를 조심한다." },
-  { word: "性格", reading: "せいかく", meaning: "성격", pos: "명사", years: ["표기"], example: "明るい性格の人だ。", exampleReading: "あかるいせいかくのひとだ。", exampleMeaning: "밝은 성격의 사람이다." },
-  { word: "訳される", reading: "やくされる", meaning: "번역되다", pos: "동사", years: ["표기"], example: "多くの言葉に訳される。", exampleReading: "おおくのことばにやくされる。", exampleMeaning: "많은 말로 번역된다." },
-  { word: "右折", reading: "うせつ", meaning: "우회전", pos: "명사·동사", years: ["표기"], example: "次の角を右折する。", exampleReading: "つぎのかどをうせつする。", exampleMeaning: "다음 모퉁이에서 우회전한다." },
-  { word: "期待", reading: "きたい", meaning: "기대", pos: "명사·동사", years: ["표기"], example: "将来に期待する。", exampleReading: "しょうらいにきたいする。", exampleMeaning: "장래를 기대한다." },
-  { word: "出勤", reading: "しゅっきん", meaning: "출근", pos: "명사·동사", years: ["표기"], example: "朝早く出勤する。", exampleReading: "あさはやくしゅっきんする。", exampleMeaning: "아침 일찍 출근한다." },
-  { word: "違います", reading: "ちがいます", meaning: "다릅니다, 틀립니다", pos: "동사", years: ["표기"], example: "答えが違います。", exampleReading: "こたえがちがいます。", exampleMeaning: "답이 다릅니다." },
-  { word: "遅く", reading: "おそく", meaning: "늦게", pos: "형용사·부사", years: ["표기"], example: "夜遅くまで起きている。", exampleReading: "よるおそくまでおきている。", exampleMeaning: "밤늦게까지 깨어 있다." },
-  { word: "専門", reading: "せんもん", meaning: "전문", pos: "명사", years: ["표기"], example: "専門の知識を学ぶ。", exampleReading: "せんもんのちしきをまなぶ。", exampleMeaning: "전문 지식을 배운다." },
-  { word: "解決", reading: "かいけつ", meaning: "해결", pos: "명사·동사", years: ["표기"], example: "問題を解決する。", exampleReading: "もんだいをかいけつする。", exampleMeaning: "문제를 해결한다." },
-  { word: "移る", reading: "うつる", meaning: "옮기다, 이사하다", pos: "동사", years: ["표기"], example: "別の部屋に移る。", exampleReading: "べつのへやにうつる。", exampleMeaning: "다른 방으로 옮긴다." },
-  { word: "熱心", reading: "ねっしん", meaning: "열심", pos: "형용사·명사", years: ["표기"], example: "熱心に練習する。", exampleReading: "ねっしんにれんしゅうする。", exampleMeaning: "열심히 연습한다." },
-  { word: "焼いて", reading: "やいて", meaning: "구워서", pos: "동사", years: ["표기"], example: "魚を焼いて出す。", exampleReading: "さかなをやいてだす。", exampleMeaning: "생선을 구워 낸다." },
-  { word: "勤めて", reading: "つとめて", meaning: "근무하며", pos: "동사", years: ["표기"], example: "会社に勤めて三年目だ。", exampleReading: "かいしゃにつとめてさんねんめだ。", exampleMeaning: "회사에 근무한 지 3년째다." },
-  { word: "自信", reading: "じしん", meaning: "자신, 자신감", pos: "명사", years: ["표기"], example: "試験に自信を持つ。", exampleReading: "しけんにじしんをもつ。", exampleMeaning: "시험에 자신을 가진다." },
-  { word: "気温", reading: "きおん", meaning: "기온", pos: "명사", years: ["표기"], example: "今日の気温は高い。", exampleReading: "きょうのきおんはたかい。", exampleMeaning: "오늘 기온은 높다." },
-  { word: "成績", reading: "せいせき", meaning: "성적", pos: "명사", years: ["표기"], example: "テストの成績が上がる。", exampleReading: "てすとのせいせきがあがる。", exampleMeaning: "시험 성적이 오른다." },
-  { word: "原因", reading: "げんいん", meaning: "원인", pos: "명사", years: ["표기"], example: "原因を調べる。", exampleReading: "げんいんをしらべる。", exampleMeaning: "원인을 조사한다." },
-  { word: "減少", reading: "げんしょう", meaning: "감소", pos: "명사·동사", years: ["표기"], example: "利用者が減少する。", exampleReading: "りようしゃがげんしょうする。", exampleMeaning: "이용자가 감소한다." },
-  { word: "痛い", reading: "いたい", meaning: "아프다", pos: "형용사", years: ["표기"], example: "足が少し痛い。", exampleReading: "あしがすこしいたい。", exampleMeaning: "다리가 조금 아프다." },
-  { word: "頭痛", reading: "ずつう", meaning: "두통", pos: "명사", years: ["표기"], example: "頭痛がする。", exampleReading: "ずつうがする。", exampleMeaning: "두통이 난다." },
-  { word: "眠って", reading: "ねむって", meaning: "잠들어서", pos: "동사", years: ["표기"], example: "静かに眠っている。", exampleReading: "しずかにねむっている。", exampleMeaning: "조용히 잠들어 있다." },
-  { word: "肝心", reading: "かんじん", meaning: "중요함", pos: "형용사·명사", years: ["표기"], example: "肝心なことを忘れない。", exampleReading: "かんじんなことをわすれない。", exampleMeaning: "중요한 일을 잊지 않는다." },
-  { word: "移って", reading: "うつって", meaning: "옮겨서", pos: "동사", years: ["표기"], example: "新しい場所に移って働く。", exampleReading: "あたらしいばしょにうつってはたらく。", exampleMeaning: "새 장소로 옮겨 일한다." },
-  { word: "浅く", reading: "あさく", meaning: "얕게", pos: "형용사·부사", years: ["표기"], example: "帽子を浅くかぶる。", exampleReading: "ぼうしをあさくかぶる。", exampleMeaning: "모자를 얕게 쓴다." },
-  { word: "帰宅", reading: "きたく", meaning: "귀가", pos: "명사·동사", years: ["표기"], example: "夜遅く帰宅する。", exampleReading: "よるおそくきたくする。", exampleMeaning: "밤늦게 귀가한다." },
-  { word: "相談", reading: "そうだん", meaning: "상담, 상의", pos: "명사·동사", years: ["표기"], example: "先生に相談する。", exampleReading: "せんせいにそうだんする。", exampleMeaning: "선생님께 상담한다." },
-  { word: "健康", reading: "けんこう", meaning: "건강", pos: "명사·형용사", years: ["표기"], example: "健康に気をつける。", exampleReading: "けんこうにきをつける。", exampleMeaning: "건강을 조심한다." },
-  { word: "追って", reading: "おって", meaning: "뒤따라, 추후", pos: "동사·부사", years: ["표기"], example: "詳細は追って知らせる。", exampleReading: "しょうさいはおってしらせる。", exampleMeaning: "자세한 내용은 추후 알린다." },
-  { word: "週刊誌", reading: "しゅうかんし", meaning: "주간지", pos: "명사", years: ["표기"], example: "週刊誌を読む。", exampleReading: "しゅうかんしをよむ。", exampleMeaning: "주간지를 읽는다." },
-  { word: "関係", reading: "かんけい", meaning: "관계", pos: "명사·동사", years: ["표기"], example: "深い関係がある。", exampleReading: "ふかいかんけいがある。", exampleMeaning: "깊은 관계가 있다." },
-  { word: "投げて", reading: "なげて", meaning: "던져서", pos: "동사", years: ["표기"], example: "ボールを投げて遊ぶ。", exampleReading: "ぼーるをなげてあそぶ。", exampleMeaning: "공을 던지며 논다." },
-  { word: "独身", reading: "どくしん", meaning: "독신", pos: "명사", years: ["표기"], example: "今は独身生活だ。", exampleReading: "いまはどくしんせいかつだ。", exampleMeaning: "지금은 독신 생활이다." },
-  { word: "涙", reading: "なみだ", meaning: "눈물", pos: "명사", years: ["표기"], example: "感動して涙が出た。", exampleReading: "かんどうしてみだでた。", exampleMeaning: "감동해서 눈물이 났다." },
-  { word: "複雑", reading: "ふくざつ", meaning: "복잡하다", pos: "형용사", years: ["표기"], example: "仕組みが複雑だ。", exampleReading: "しくみがふくざつだ。", exampleMeaning: "구조가 복잡하다." },
-  { word: "輸出", reading: "ゆしゅつ", meaning: "수출", pos: "명사·동사", years: ["표기"], example: "製品を輸出する。", exampleReading: "せいひんをゆしゅつする。", exampleMeaning: "제품을 수출한다." },
-  { word: "波", reading: "なみ", meaning: "파도", pos: "명사", years: ["표기"], example: "海の波が高い。", exampleReading: "うみのなみがたかい。", exampleMeaning: "바다 파도가 높다." },
-  { word: "貸す", reading: "かす", meaning: "빌려주다", pos: "동사", years: ["표기", "동사"], example: "本を貸す。", exampleReading: "ほんをかす。", exampleMeaning: "책을 빌려준다." },
-  { word: "信じる", reading: "しんじる", meaning: "믿다", pos: "동사", years: ["표기"], example: "友達を信じる。", exampleReading: "ともだちをしんじる。", exampleMeaning: "친구를 믿는다." },
-  { word: "疲れる", reading: "つかれる", meaning: "피곤하다", pos: "동사", years: ["표기"], example: "長く歩いて疲れる。", exampleReading: "ながくあるいてつかれる。", exampleMeaning: "오래 걸어 피곤하다." },
+  // [2024년 기출]
+  {
+    word: "あきらめる",
+    reading: "あきらめる",
+    meaning: "포기하다, 단념하다",
+    pos: "동사(일어·타동사)",
+    years: ["2024년 기출(문맥구성)"],
+    example: "最後まであきらめないで挑戦し続けよう。",
+    exampleReading: "さいごまであきらめないでちょうせんしつづけよう。",
+    exampleMeaning: "끝까지 포기하지 말고 계속 도전합시다."
+  },
+  {
+    word: "アクセス",
+    reading: "あくせす",
+    meaning: "액세스, 접속, 교통 접근",
+    pos: "명사·동사·외래어",
+    years: ["2024년 기출(문맥구성)"],
+    example: "このホテルは駅からアクセスがよい。",
+    exampleReading: "このほてるはえきからあくせすがよい。",
+    exampleMeaning: "이 호텔은 역에서 접근성이 좋습니다."
+  },
+  {
+    word: "あせ",
+    reading: "あせ",
+    meaning: "땀",
+    pos: "명사",
+    years: ["2024년 기출(문맥구성)"],
+    example: "走ったあとで額のあせをタオルでふいた。",
+    exampleReading: "はしったあとでひたいのあせをたおるでふいた。",
+    exampleMeaning: "달린 뒤에 이마의 땀을 수건으로 닦았습니다."
+  },
+  {
+    word: "あやしい",
+    reading: "あやしい",
+    meaning: "수상하다, 의심스럽다, 흐리멍텅하다",
+    pos: "い형용사",
+    years: ["2024년 기출(문맥구성)"],
+    example: "暗くなってきたので、午後の天気があやしい。",
+    exampleReading: "くらくなってきたので、ごごのてんきがあやしい。",
+    exampleMeaning: "어두워지기 시작했으니 오후 날씨가 수상합니다."
+  },
+  {
+    word: "うらやましい",
+    reading: "うらやましい",
+    meaning: "부럽다",
+    pos: "い형용사",
+    years: ["2024년 기출(문맥구성)"],
+    example: "夏休みに海外旅行に行けるなんてうらやましい。",
+    exampleReading: "なつやすみにかいがいりょこうにいけるなんてうらやましい。",
+    exampleMeaning: "여름방학에 해외여행을 갈 수 있다니 부럽습니다."
+  },
+  {
+    word: "うろうろ",
+    reading: "うろうろ",
+    meaning: "어슬렁어슬렁, 서성거리다",
+    pos: "부사",
+    years: ["2024년 기출(문맥구성)"],
+    example: "駅の前で迷ったのか、うろうろしている人がいる。",
+    exampleReading: "えきのまえでまよったのか、うろうろしているひとがいる。",
+    exampleMeaning: "역 앞에서 길을 잃었는지 서성거리는 사람이 있습니다."
+  },
+  {
+    word: "禁止",
+    reading: "きんし",
+    meaning: "금지",
+    pos: "명사·동사",
+    years: ["2024년 기출(문맥구성)"],
+    example: "このエリアでの写真撮影は禁止されている。",
+    exampleReading: "このえりあでのしゃしんさつえいはきんしされている。",
+    exampleMeaning: "이 구역에서의 사진 촬영은 금지되어 있습니다."
+  },
+  {
+    word: "覚める",
+    reading: "さめる",
+    meaning: "잠이 깨다",
+    pos: "동사(일어·자동사)",
+    years: ["2024년 기출(문맥구성)"],
+    example: "目覚まし時計が鳴る前に目が覚めた。",
+    exampleReading: "めざましどけいがなるまえにめがさめた。",
+    exampleMeaning: "자명종이 울리기 전에 눈이 떠졌습니다."
+  },
+  {
+    word: "取り出す",
+    reading: "とりだす",
+    meaning: "꺼내다",
+    pos: "동사(오단·타동사)",
+    years: ["2024년 기출(문맥구성)"],
+    example: "かばんから財布を取り出して代金を払った。",
+    exampleReading: "かばんからさいふをとりだしてだいきんをはらった。",
+    exampleMeaning: "가방에서 지갑을 꺼내 대금을 지불했습니다."
+  },
+  {
+    word: "マイク",
+    reading: "まいく",
+    meaning: "마이크",
+    pos: "명사·외래어",
+    years: ["2024년 기출(문맥구성)"],
+    example: "後ろの席まで聞こえるようにマイクを使った。",
+    exampleReading: "うしろのせきまできこえるようにまいくをつかった。",
+    exampleMeaning: "뒷좌석까지 들리도록 마이크를 사용했습니다."
+  },
+  {
+    word: "もったいない",
+    reading: "もったいない",
+    meaning: "아깝다",
+    pos: "い형용사",
+    years: ["2024년 기출(문맥구성)"],
+    example: "まだ食べられるのに捨てるのはもったいない。",
+    exampleReading: "まだたべられるのにすてるのはもったいない。",
+    exampleMeaning: "아직 먹을 수 있는데 버리는 것은 아깝습니다."
+  },
+  {
+    word: "落ち着く",
+    reading: "おちつく",
+    meaning: "진정되다, 차분해지다, 자리 잡다",
+    pos: "동사(오단·자동사)",
+    years: ["2024년 기출(용법)"],
+    example: "深呼吸をして気持ちを落ち着かせた。",
+    exampleReading: "しんこきゅうをしてきもちをおちつかせた。",
+    exampleMeaning: "심호흡을 하고 마음을 진정시켰습니다."
+  },
+  {
+    word: "活動",
+    reading: "かつどう",
+    meaning: "활동",
+    pos: "명사·동사",
+    years: ["2024년 기출(용법)"],
+    example: "大学ではボランティア活動に参加している。",
+    exampleReading: "だいがくではぼらんてぃあかつどうにさんかしている。",
+    exampleMeaning: "대학에서는 봉사 활동에 참가하고 있습니다."
+  },
+  {
+    word: "ひびく",
+    reading: "ひびく",
+    meaning: "울리다, 영향을 미치다",
+    pos: "동사(오단·자동사)",
+    years: ["2024년 기출(용법)"],
+    example: "ホールにきれいなピアノの音がひびいた。",
+    exampleReading: "ほーるにきれいなぴあのおとがひびいた。",
+    exampleMeaning: "홀에 아름다운 피아노 소리가 울려 퍼졌습니다."
+  },
+  {
+    word: "ぐっすり",
+    reading: "ぐっすり",
+    meaning: "푹, 깊이",
+    pos: "부사",
+    years: ["2024년 기출(용법)"],
+    example: "昨日はよく歩いたのでぐっすり眠れた。",
+    exampleReading: "きのうはよくあるいたのでぐっすりねむれた。",
+    exampleMeaning: "어제는 많이 걸어서 푹 잘 수 있었습니다."
+  },
+  {
+    word: "実物",
+    reading: "じつぶつ",
+    meaning: "실물",
+    pos: "명사",
+    years: ["2024년 기출(용법)"],
+    example: "写真で見るより実物のほうがずっと大きい。",
+    exampleReading: "しゃしんでみるよりじつぶつのほうがずっとおおきい。",
+    exampleMeaning: "사진으로 보는 것보다 실물이 훨씬 큽니다."
+  },
+  {
+    word: "内容",
+    reading: "ないよう",
+    meaning: "내용",
+    pos: "명사",
+    years: ["2024년 기출(용법)"],
+    example: "会議の内容をメモに記録した。",
+    exampleReading: "かいぎのないようをめもにきろくした。",
+    exampleMeaning: "회의 내용을 메모에 기록했습니다."
+  },
+  {
+    word: "にこにこ",
+    reading: "にこにこ",
+    meaning: "방긋방긋, 생긋생긋",
+    pos: "부사",
+    years: ["2024년 기출(용법)"],
+    example: "赤ちゃんがにこにこ笑いながらこちらを見た。",
+    exampleReading: "あかちゃんがおにこにこわらいながらこちらをみた。",
+    exampleMeaning: "아기가 방긋방긋 웃으며 이쪽을 보았습니다."
+  },
+  {
+    word: "話しかける",
+    reading: "はなしかける",
+    meaning: "말을 걸다",
+    pos: "동사(일어·타동사)",
+    years: ["2024년 기출(용법)"],
+    example: "隣の席の人に英語で話しかけてみた。",
+    exampleReading: "となりのせきのひとにえいごではなしかけてみた。",
+    exampleMeaning: "옆자리에 앉은 사람에게 영어로 말을 걸어 보았습니다."
+  },
 
-  // [문제 3: 문맥구성]
-  { word: "アナウンス", reading: "あなうーんす", meaning: "안내 방송", pos: "명사·외래어", years: ["문맥구성"], example: "駅のアナウンスを聞く。", exampleReading: "えきのあなうーんすをきく。", exampleMeaning: "역 안내 방송을 듣는다." },
-  { word: "案外", reading: "あんがい", meaning: "의외로", pos: "부사·형용사", years: ["문맥구성"], example: "案外簡単だった。", exampleReading: "あんがいかんたんだった。", exampleMeaning: "의외로 쉬웠다." },
-  { word: "くやしい", reading: "くやしい", meaning: "분하다, 억울하다", pos: "형용사", years: ["문맥구성"], example: "負けてくやしい。", exampleReading: "まけてくやしい。", exampleMeaning: "져서 분하다." },
-  { word: "しかたない", reading: "しかたない", meaning: "어쩔 수 없다", pos: "표현", years: ["문맥구성"], example: "雨だからしかたない。", exampleReading: "あめだからしかたない。", exampleMeaning: "비니까 어쩔 수 없다." },
-  { word: "リスト", reading: "りすと", meaning: "목록, 리스트", pos: "명사·외래어", years: ["문맥구성"], example: "買い物リストを作る。", exampleReading: "かいものりすとをつくる。", exampleMeaning: "장보기 목록을 만든다." },
-  { word: "あきらめる", reading: "あきらめる", meaning: "포기하다", pos: "동사", years: ["문맥구성"], example: "まだあきらめない。", exampleReading: "まだあきらめない。", exampleMeaning: "아직 포기하지 않는다." },
-  { word: "アクセス", reading: "あくせす", meaning: "접근, 접속", pos: "명사·외래어", years: ["문맥구성"], example: "駅からアクセスがいい。", exampleReading: "えきからあくせすがいい。", exampleMeaning: "역에서 접근성이 좋다." },
-  { word: "あやしい", reading: "あやしい", meaning: "수상하다", pos: "형용사", years: ["문맥구성"], example: "動きがあやしい。", exampleReading: "うごきがあやしい。", exampleMeaning: "움직임이 수상하다." },
-  { word: "うらやましい", reading: "うらやましい", meaning: "부럽다", pos: "형용사", years: ["문맥구성"], example: "旅行に行けてうらやましい。", exampleReading: "りょこうにいけてうらやましい。", exampleMeaning: "여행을 갈 수 있어 부럽다." },
-  { word: "うろうろ", reading: "うろうろ", meaning: "서성거리다", pos: "부사", years: ["문맥구성"], example: "駅周辺をうろうろする。", exampleReading: "えきしゅうへんをうろうろする。", exampleMeaning: "역 주변을 서성거린다." },
-  { word: "禁止", reading: "きんし", meaning: "금지", pos: "명사·동사", years: ["문맥구성"], example: "撮影は禁止されている。", exampleReading: "さつえいはきんしされている。", exampleMeaning: "촬영은 금지되어 있다." },
-  { word: "覚める", reading: "さめる", meaning: "잠이 깨다", pos: "동사", years: ["문맥구성"], example: "朝早く目が覚める。", exampleReading: "あさはやくめがさめる。", exampleMeaning: "아침 일찍 잠이 깬다." },
-  { word: "取り出す", reading: "とりだす", meaning: "꺼내다", pos: "동사", years: ["문맥구성"], example: "かばんから鍵を取り出す。", exampleReading: "かばんからかぎをとりだす。", exampleMeaning: "가방에서 열쇠를 꺼낸다." },
-  { word: "マイク", reading: "まいく", meaning: "마이크", pos: "명사·외래어", years: ["문맥구성"], example: "マイクで話す。", exampleReading: "まいくではなす。", exampleMeaning: "마이크로 말한다." },
-  { word: "もったいない", reading: "もったいない", meaning: "아깝다", pos: "형용사", years: ["문맥구성"], example: "捨てるのはもったいない。", exampleReading: "すてるのはもったいない。", exampleMeaning: "버리는 건 아깝다." },
-  { word: "あくび", reading: "あくび", meaning: "하품", pos: "명사·동사", years: ["문맥구성"], example: "眠くてあくびが出る。", exampleReading: "ねむくてあくびがでる。", exampleMeaning: "졸려서 하품이 나온다." },
-  { word: "登場", reading: "とうじょう", meaning: "등장", pos: "명사·동사", years: ["문맥구성"], example: "新しい人物が登場する。", exampleReading: "あたらしいじんぶつがとうじょうする。", exampleMeaning: "새로운 인물이 등장한다." },
-  { word: "配達", reading: "はいたつ", meaning: "배달", pos: "명사·동사", years: ["문맥구성"], example: "荷物が配達される。", exampleReading: "にもつがはいたつされる。", exampleMeaning: "짐이 배달된다." },
-  { word: "引き受ける", reading: "ひきうける", meaning: "맡다", pos: "동사", years: ["문맥구성", "용법"], example: "係を引き受ける。", exampleReading: "かかりをひきうける。", exampleMeaning: "담당을 맡는다." },
-  { word: "ぴったり", reading: "ぴったり", meaning: "딱 맞음", pos: "부사", years: ["문맥구성"], example: "サイズがぴったりだ。", exampleReading: "さいずがぴったりだ。", exampleMeaning: "사이즈가 딱 맞다." },
-  { word: "ユーモア", reading: "ゆーもあ", meaning: "유머", pos: "명사·외래어", years: ["문맥구성", "용법"], example: "ユーモアがある話し方だ。", exampleReading: "ゆーもあがあるはなしかただ。", exampleMeaning: "유머가 있는 말투다." },
-  { word: "さっそく", reading: "さっそく", meaning: "곧바로", pos: "부사", years: ["문맥구성", "유의표현"], example: "さっそく試してみる。", exampleReading: "さっそくためしてみる。", exampleMeaning: "곧바로 시도해 본다." },
-  { word: "締め切り", reading: "しめきり", meaning: "마감", pos: "명사", years: ["문맥구성"], example: "締め切りを守る。", exampleReading: "しめきりをまもる。", exampleMeaning: "마감을 지킨다." },
-  { word: "デザイン", reading: "でざいん", meaning: "디자인", pos: "명사·외래어", years: ["문맥구성"], example: "シンプルなデザインだ。", exampleReading: "しんぷるなデザインだ。", exampleMeaning: "심플한 디자인이다." },
-  { word: "どきどき", reading: "どきどき", meaning: "두근두근", pos: "부사", years: ["문맥구성", "용법"], example: "発表の前はどきどきする。", exampleReading: "はっぴょうのまえはどきどきする。", exampleMeaning: "발표 전엔 두근두근하다." },
-  { word: "とける", reading: "とける", meaning: "녹다, 풀리다", pos: "동사", years: ["문맥구성"], example: "氷がとける。", exampleReading: "こおりがとける。", exampleMeaning: "얼음이 녹는다." },
-  { word: "取り消す", reading: "とりけす", meaning: "취소하다", pos: "동사", years: ["문맥구성"], example: "予約を取り消す。", exampleReading: "よやくをとりけす。", exampleMeaning: "예약을 취소한다." },
-  { word: "ノック", reading: "のっく", meaning: "노크", pos: "명사·동사·외래어", years: ["문맥구성"], example: "ドアをノックする。", exampleReading: "どあをのっくする。", exampleMeaning: "문을 노크한다." },
-  { word: "めんどうくさい", reading: "めんどうくさい", meaning: "귀찮다, 번거롭다", pos: "형용사", years: ["문맥구성"], example: "手続きがめんどうくさい。", exampleReading: "てつづきがめんどうくさい。", exampleMeaning: "절차가 귀찮다." },
-  { word: "あふれる", reading: "あふれる", meaning: "넘치다", pos: "동사", years: ["문맥구성"], example: "水があふれる。", exampleReading: "みずがあふれる。", exampleMeaning: "물이 넘친다." },
-  { word: "意外に", reading: "いがいに", meaning: "의외로", pos: "부사·형용사", years: ["문맥구성"], example: "意外に時間がかからない。", exampleReading: "いがいにじかんがかからない。", exampleMeaning: "의외로 시간이 걸리지 않는다." },
-  { word: "うっかり", reading: "うっかり", meaning: "깜빡", pos: "부사", years: ["문맥구성"], example: "うっかり忘れてしまった。", exampleReading: "うっかりわすれてしまった。", exampleMeaning: "깜빡 잊어버렸다." },
-  { word: "エネルギー", reading: "えねるぎー", meaning: "에너지", pos: "명사·외래어", years: ["문맥구성"], example: "エネルギーを節約する。", exampleReading: "えねるぎーをせつやくする。", exampleMeaning: "에너지를 절약한다." },
-  { word: "重ねる", reading: "かさねる", meaning: "겹치다, 거듭하다", pos: "동사", years: ["문맥구성"], example: "経験を重ねる。", exampleReading: "けいけんをかさねる。", exampleMeaning: "경험을 쌓는다." },
-  { word: "乾燥", reading: "かんそう", meaning: "건조", pos: "명사·동사", years: ["문맥구성"], example: "空気が乾燥する。", exampleReading: "くうきがかんそうする。", exampleMeaning: "공기가 건조하다." },
-  { word: "きつい", reading: "きつい", meaning: "꽉 끼다, 힘들다", pos: "형용사", years: ["문맥구성", "유의표현"], example: "靴が少しきつい。", exampleReading: "くつがすこしきつい。", exampleMeaning: "신발이 조금 꽉 낀다." },
-  { word: "原料", reading: "げんりょう", meaning: "원료", pos: "명사", years: ["문맥구성", "용법"], example: "菓子の原料を調べる。", exampleReading: "かしのげんりょうをしらべる。", exampleMeaning: "과자 원료를 조사한다." },
-  { word: "しっかり", reading: "しっかり", meaning: "단단히, 확실히", pos: "부사", years: ["문맥구성"], example: "しっかり確認する。", exampleReading: "しっかりかくにんする。", exampleMeaning: "확실히 확인한다." },
-  { word: "組んで", reading: "くんで", meaning: "짝을 지어, 짜서", pos: "동사", years: ["문맥구성"], example: "ペアを組んで練習する。", exampleReading: "ぺあをくんでれんしゅうする。", exampleMeaning: "페어를 짜서 연습한다." },
-  { word: "教師", reading: "きょうし", meaning: "교사", pos: "명사", years: ["문맥구성"], example: "学校の教師になる。", exampleReading: "がっこうのきょうしになる。", exampleMeaning: "학교 교사가 된다." },
-  { word: "当たった", reading: "あたった", meaning: "당첨되었다, 맞았다", pos: "동사", years: ["문맥구성"], example: "くじが当たった。", exampleReading: "くじがあたった。", exampleMeaning: "제비가 당첨되었다." },
-  { word: "記録", reading: "きろく", meaning: "기록", pos: "명사·동사", years: ["문맥구성"], example: "結果を記録する。", exampleReading: "けっかをきろくする。", exampleMeaning: "결과를 기록한다." },
-  { word: "欠席", reading: "けっせき", meaning: "결석", pos: "명사·동사", years: ["문맥구성"], example: "授業を欠席する。", exampleReading: "じゅぎょうをけっせきする。", exampleMeaning: "수업을 결석한다." },
-  { word: "温める", reading: "あたためる", meaning: "데우다", pos: "동사", years: ["문맥구성"], example: "スープを温める。", exampleReading: "すーぷをあたためる。", exampleMeaning: "수프를 데운다." },
-  { word: "暮らした", reading: "くらした", meaning: "지냈다, 살았다", pos: "동사", years: ["문맥구성"], example: "田舎で暮らした。", exampleReading: "いなかでくらした。", exampleMeaning: "시골에서 지냈다." },
-  { word: "とじて", reading: "とじて", meaning: "닫아서", pos: "동사", years: ["문맥구성"], example: "本をとじて置く。", exampleReading: "ほんをとじておく。", exampleMeaning: "책을 닫아 둔다." },
-  { word: "むすんで", reading: "むすんで", meaning: "묶어서, 맺어서", pos: "동사", years: ["문맥구성"], example: "ひもをむすんで結ぶ。", exampleReading: "ひもをむすんでむすぶ。", exampleMeaning: "끈을 묶어 맺는다." },
-  { word: "そっくり", reading: "そっくり", meaning: "쏙 닮음", pos: "부사·형용사", years: ["문맥구성", "용법"], example: "顔がそっくりだ。", exampleReading: "かおがそっくりだ。", exampleMeaning: "얼굴이 똑같다." },
-  { word: "両替", reading: "りょうがえ", meaning: "환전, 잔돈 바꿈", pos: "명사·동사", years: ["문맥구성"], example: "お金を両替する。", exampleReading: "おかねをりょうがえする。", exampleMeaning: "돈을 환전한다." },
-  { word: "チェック", reading: "ちぇっく", meaning: "확인, 체크", pos: "명사·동사·외래어", years: ["문맥구성", "유의표현"], example: "持ち物をチェックする。", exampleReading: "もちものをちぇっくする。", exampleMeaning: "소지품을 확인한다." },
-  { word: "カーブ", reading: "かーぶ", meaning: "커브", pos: "명사·외래어", years: ["문맥구성"], example: "急なカーブを曲がる。", exampleReading: "きゅうなかーぶをまがる。", exampleMeaning: "급커브를 돈다." },
-  { word: "しまっている", reading: "しまっている", meaning: "닫혀 있다", pos: "동사", years: ["문맥구성"], example: "ドアがしまっている。", exampleReading: "どあがしまっている。", exampleMeaning: "문이 닫혀 있다." },
-  { word: "しばって", reading: "しばって", meaning: "묶어서", pos: "동사", years: ["문맥구성"], example: "ひもでしばってまとめる。", exampleReading: "ひもでしばってまとめる。", exampleMeaning: "끈으로 묶어 정리한다." },
-  { word: "正常", reading: "せいじょう", meaning: "정상", pos: "형용사·명사", years: ["문맥구성"], example: "正常に動く。", exampleReading: "せいじょうにうごく。", exampleMeaning: "정상으로 움직인다." },
-  { word: "あつかって", reading: "あつかって", meaning: "다루어서", pos: "동사", years: ["문맥구성"], example: "丁寧にあつかってください。", exampleReading: "ていねいにあつかってください。", exampleMeaning: "정중히 다뤄 주세요." },
-  { word: "ぐっすり", reading: "ぐっすり", meaning: "푹", pos: "부사", years: ["문맥구성", "용법"], example: "ぐっすり眠る。", exampleReading: "ぐっすりねむる。", exampleMeaning: "푹 잔다." },
-  { word: "共通", reading: "きょうつう", meaning: "공통", pos: "명사·동사", years: ["문맥구성", "용법"], example: "共通の趣味がある。", exampleReading: "きょうつうのしゅみがある。", exampleMeaning: "공통된 취미가 있다." },
-  { word: "話しかける", reading: "はなしかける", meaning: "말을 걸다", pos: "동사", years: ["문맥구성", "용법"], example: "隣の人と話しかける。", exampleReading: "となりのひととはなしかける。", exampleMeaning: "옆 사람에게 말을 건다." },
-  { word: "オーダー", reading: "おーだー", meaning: "주문, 오더", pos: "명사·동사·외래어", years: ["문맥구성", "용법"], example: "料理をオーダーする。", exampleReading: "りょうりをおーだーする。", exampleMeaning: "요리를 주문한다." },
-  { word: "きつくて", reading: "きつくて", meaning: "꽉 끼어서, 힘들어서", pos: "형용사", years: ["문맥구성"], example: "きつくて履きにくい。", exampleReading: "きつくてはきにくい。", exampleMeaning: "꽉 끼어서 신기 어렵다." },
-  { word: "ゆるくて", reading: "ゆるくて", meaning: "헐렁해서", pos: "형용사", years: ["문맥구성"], example: "ベルトがゆるくて落ちる。", exampleReading: "べるっとがゆるくておちる。", exampleMeaning: "벨트가 헐렁해서 떨어진다." },
-  { word: "ゆれて", reading: "ゆれて", meaning: "흔들려서", pos: "동사", years: ["문맥구성"], example: "電車がゆれて立っていられない。", exampleReading: "でんしゃがゆれてたっていられない。", exampleMeaning: "전철이 흔들려 서 있을 수 없다." },
-  { word: "たしかめ", reading: "たしかめ", meaning: "확인", pos: "명사·동사", years: ["문맥구성"], example: "火の元のたしかめをする。", exampleReading: "ひのもとのたしかめをする。", exampleMeaning: "불단속 확인을 한다." },
-  { word: "ふって", reading: "ふって", meaning: "흔들어서", pos: "동사", years: ["문맥구성"], example: "よくふってから開ける。", exampleReading: "よくふってからあける。", exampleMeaning: "잘 흔든 뒤 연다." },
-  { word: "カタログ", reading: "かたろぐ", meaning: "카탈로그", pos: "명사·외래어", years: ["문맥구성"], example: "カタログを見て選ぶ。", exampleReading: "かたろぐをみてえらぶ。", exampleMeaning: "카탈로그를 보고 고른다." },
-  { word: "せき", reading: "せき", meaning: "기침", pos: "명사", years: ["문맥구성"], example: "せきが出る。", exampleReading: "せきがでる。", exampleMeaning: "기침이 나온다." },
-  { word: "あずけて", reading: "あずけて", meaning: "맡겨서", pos: "동사", years: ["문맥구성"], example: "受付にあずけて入る。", exampleReading: "うけつけにあずけてはいる。", exampleMeaning: "접수에 맡기고 들어간다." },
-  { word: "かさねて", reading: "かさねて", meaning: "겹쳐서", pos: "동사", years: ["문맥구성", "표기"], example: "紙をかさねてそろえる。", exampleReading: "かみをかさねてそろえる。", exampleMeaning: "종이를 겹쳐 맞춘다." },
-  { word: "しみ", reading: "しみ", meaning: "얼룩, 기미", pos: "명사", years: ["문맥구성"], example: "服にしみがつく。", exampleReading: "ふくにしみがつく。", exampleMeaning: "옷에 얼룩이 생긴다." },
-  { word: "リサイクル", reading: "りさいくる", meaning: "재활용", pos: "명사·동사·외래어", years: ["문맥구성"], example: "缶をリサイクルに出す。", exampleReading: "かんをりさいくるにだす。", exampleMeaning: "캔을 재활용으로 낸다." },
-  { word: "わかれて", reading: "わかれて", meaning: "갈라져서, 헤어져서", pos: "동사", years: ["문맥구성"], example: "駅でわかれて帰る。", exampleReading: "えきでわかれてかえる。", exampleMeaning: "역에서 헤어져 돌아간다." },
-  { word: "かくした", reading: "かくした", meaning: "숨겼다", pos: "동사", years: ["문맥구성"], example: "箱にかくした。", exampleReading: "はこにかくした。", exampleMeaning: "상자에 숨겼다." },
-  { word: "のばした", reading: "のばした", meaning: "늘렸다, 폈다", pos: "동사", years: ["문맥구성"], example: "しわをのばした。", exampleReading: "しわをのばした。", exampleMeaning: "주름을 폈다." },
-  { word: "つつまれた", reading: "つつまれた", meaning: "감싸였다", pos: "동사", years: ["문맥구성"], example: "光につつまれた。", exampleReading: "ひかりにつつまれた。", exampleMeaning: "빛에 감싸였다." },
-  { word: "しまって", reading: "しまって", meaning: "넣어서, 치워서", pos: "동사", years: ["문맥구성"], example: "棚にしまっておく。", exampleReading: "たなにしまっておく。", exampleMeaning: "선반에 넣어 둔다." },
-  { word: "キャンセル", reading: "きゃんせる", meaning: "취소", pos: "명사·동사·외래어", years: ["문맥구성"], example: "予約をキャンセルする。", exampleReading: "よやくをきゃんせるする。", exampleMeaning: "예약을 취소한다." },
-  { word: "あな", reading: "あな", meaning: "구멍", pos: "명사", years: ["문맥구성"], example: "靴下にあながあく。", exampleReading: "くつしたにあながあく。", exampleMeaning: "양말에 구멍이 난다." },
-  { word: "交換", reading: "こうかん", meaning: "교환", pos: "명사·동사", years: ["문맥구성"], example: "連絡先を交換する。", exampleReading: "れんらくさきをこうかんする。", exampleMeaning: "연락처를 교환한다." },
-  { word: "自動的に", reading: "じどうてきに", meaning: "자동적으로", pos: "부사", years: ["문맥구성"], example: "自動的に動く。", exampleReading: "じどうてきにうごく。", exampleMeaning: "자동적으로 움직인다." },
-  { word: "取り消した", reading: "とりけした", meaning: "취소했다", pos: "동사", years: ["문맥구성"], example: "注文を取り消した。", exampleReading: "ちゅうもんをとりけした。", exampleMeaning: "주문을 취소했다." },
-  { word: "ずいぶん", reading: "ずいぶん", meaning: "꽤, 상당히", pos: "부사·형용사", years: ["문맥구성", "부사"], example: "ずいぶん寒くなった。", exampleReading: "ずいぶんさむくなった。", exampleMeaning: "꽤 추워졌다." },
-  { word: "わけて", reading: "わけて", meaning: "나누어서", pos: "동사", years: ["문맥구성"], example: "みんなでわけて食べる。", exampleReading: "みんなでわけてたべる。", exampleMeaning: "다 같이 나누어 먹는다." },
-  { word: "おぼれた", reading: "おぼれた", meaning: "물에 빠졌다", pos: "동사", years: ["문맥구성"], example: "おぼれそうになった。", exampleReading: "おぼれそうになった。", exampleMeaning: "물에 빠질 뻔했다." },
-  { word: "ながれ", reading: "ながれ", meaning: "흐름", pos: "명사", years: ["문맥구성"], example: "川のながれが速い。", exampleReading: "かわのながれがはやい。", exampleMeaning: "강 흐름이 빠르다." },
-  { word: "ためて", reading: "ためて", meaning: "모아서", pos: "동사", years: ["문맥구성"], example: "お金をためて旅行する。", exampleReading: "おかねをためてりょこうする。", exampleMeaning: "돈을 모아 여행한다." },
-  { word: "アドバイス", reading: "あどばいす", meaning: "조언", pos: "명사·동사·외래어", years: ["문맥구성"], example: "先輩にアドバイスをもらう。", exampleReading: "せんぱいにあどばいすをもらう。", exampleMeaning: "선배에게 조언을 받는다." },
-  { word: "発表", reading: "はっぴょう", meaning: "발표", pos: "명사·동사", years: ["문맥구성"], example: "結果を発表する。", exampleReading: "けっかをはっぴょうする。", exampleMeaning: "결과를 발표한다." },
-  { word: "ふらふら", reading: "ふらふら", meaning: "비틀거리다, 어지럽다", pos: "부사", years: ["문맥구성", "용법"], example: "頭がふらふらする。", exampleReading: "あたまがふらふらする。", exampleMeaning: "머리가 어지럽다." },
-  { word: "たたんで", reading: "たたんで", meaning: "접어서", pos: "동사", years: ["문맥구성"], example: "服をたたんでしまう。", exampleReading: "ふくをたたんでしまう。", exampleMeaning: "옷을 접어 넣는다." },
-  { word: "なつかしい", reading: "なつかしい", meaning: "그립다", pos: "형용사", years: ["문맥구성", "용법"], example: "昔の歌がなつかしい。", exampleReading: "むかしのうたがなつかしい。", exampleMeaning: "옛 노래가 그립다." },
-  { word: "うわさ", reading: "うわさ", meaning: "소문", pos: "명사·동사", years: ["문맥구성"], example: "店のうわさを聞く。", exampleReading: "みせのうわさをきく。", exampleMeaning: "가게 소문을 듣는다." },
-  { word: "イメージ", reading: "いめーじ", meaning: "이미지", pos: "명사·동사·외래어", years: ["문맥구성"], example: "完成をイメージする。", exampleReading: "かんせいをいめーじする。", exampleMeaning: "완성을 떠올린다." },
-  { word: "カバー", reading: "かばー", meaning: "커버", pos: "명사·동사·외래어", years: ["문맥구성"], example: "本にカバーをつける。", exampleReading: "ほんにかばーをつける。", exampleMeaning: "책에 커버를 씌운다." },
-  { word: "ぶつける", reading: "ぶつける", meaning: "부딪치다", pos: "동사", years: ["문맥구성"], example: "机にひざをぶつける。", exampleReading: "つくえにひざをぶつける。", exampleMeaning: "책상에 무릎을 부딪친다." },
-  { word: "むく", reading: "むく", meaning: "껍질을 벗기다", pos: "동사", years: ["문맥구성"], example: "みかんの皮をむく。", exampleReading: "みかんのかわをむく。", exampleMeaning: "귤 껍질을 깐다." },
-  { word: "ぬく", reading: "ぬく", meaning: "뽑다, 빼다", pos: "동사", years: ["문맥구성"], example: "プラグをぬく。", exampleReading: "ぷらぐをぬく。", exampleMeaning: "플러그를 뽑는다." },
-  { word: "あわ", reading: "あわ", meaning: "거품", pos: "명사", years: ["문맥구성"], example: "石けんのあわを作る。", exampleReading: "せっけんのあわをつくる。", exampleMeaning: "비누 거품을 만든다." },
-  { word: "しぼって", reading: "しぼって", meaning: "짜서", pos: "동사", years: ["문맥구성"], example: "タオルをしぼってふく。", exampleReading: "たおるをしぼってふく。", exampleMeaning: "수건을 짜서 닦는다." },
-  { word: "待ち合わせる", reading: "まちあわせる", meaning: "만나기로 약속하다", pos: "동사", years: ["문맥구성"], example: "駅で待ち合わせる。", exampleReading: "えきでまちあわせる。", exampleMeaning: "역에서 만나기로 한다." },
-  { word: "とけて", reading: "とけて", meaning: "녹아서, 풀려서", pos: "동사", years: ["문맥구성"], example: "砂糖がお湯にとけて消える。", exampleReading: "さとうがおゆにとけてきえる。", exampleMeaning: "설탕이 뜨거운 물에 녹아 사라진다." },
+  // [2023~2021년 기출]
+  {
+    word: "悲しそう",
+    reading: "かなしそう",
+    meaning: "슬퍼 보임",
+    pos: "な형용사",
+    years: ["2023년 기출(한자읽기)"],
+    example: "彼女は何かあったのか、とても悲しそうだった。",
+    exampleReading: "かのじょはなにかあったのか、とてもかなしそうだった。",
+    exampleMeaning: "그녀는 무슨 일이 있었는지 매우 슬퍼 보였습니다."
+  },
+  {
+    word: "適当",
+    reading: "てきとう",
+    meaning: "적당함, 알맞음",
+    pos: "명사·な형용사",
+    years: ["2023년 기출(한자읽기)"],
+    example: "スープの量に合わせて塩を適当に加える。",
+    exampleReading: "すーぷのりょうにあわせてしおをてきとうにくわえる。",
+    exampleMeaning: "수프 양에 맞춰 소금을 적당히 넣습니다."
+  },
+  {
+    word: "残す",
+    reading: "のこす",
+    meaning: "남기다",
+    pos: "동사(오단·타동사)",
+    years: ["2023년 기출(한자읽기)"],
+    example: "明日のために資料を少し残しておいた。",
+    exampleReading: "あしたのためにしりょうをすこしのこしておいた。",
+    exampleMeaning: "내일을 위해 자료를 조금 남겨 두었습니다."
+  },
+  {
+    word: "角",
+    reading: "かど",
+    meaning: "모퉁이, 길모퉁이",
+    pos: "명사",
+    years: ["2023년 기출(한자읽기)"],
+    example: "二つ目の角を右に曲がると郵便局がある。",
+    exampleReading: "ふたつめのかどをみぎにまがるとゆうびんきょくがある。",
+    exampleMeaning: "두 번째 모퉁이에서 오른쪽으로 돌면 우체국이 있습니다."
+  },
+  {
+    word: "比べ",
+    reading: "くらべ",
+    meaning: "비교",
+    pos: "명사",
+    years: ["2023년 기출(한자읽기)"],
+    example: "去年に比べ、今年の夏は雨が多い。",
+    exampleReading: "きょねんにくらべ、ことしのなつはあめがおおい。",
+    exampleMeaning: "작년에 비해 올해 여름은 비가 많습니다."
+  },
+  {
+    word: "採用",
+    reading: "さいよう",
+    meaning: "채용",
+    pos: "명사·동사",
+    years: ["2023년 기출(한자읽기)"],
+    example: "新しいアイデアが企画に採用された。",
+    exampleReading: "あたらしいあいでぃあがきかくにさいようされた。",
+    exampleMeaning: "새로운 아이디어가 기획에 채택되었습니다."
+  },
+  {
+    word: "他人",
+    reading: "たにん",
+    meaning: "타인, 남",
+    pos: "명사",
+    years: ["2023년 기출(한자읽기)"],
+    example: "他人の荷物に触れないように気をつける。",
+    exampleReading: "たにんのにもつにふれないようにきをつける。",
+    exampleMeaning: "다른 사람의 짐에 닿지 않도록 조심합니다."
+  },
+  {
+    word: "あたえる",
+    reading: "あたえる",
+    meaning: "주다, 부여하다, 끼치다",
+    pos: "동사(일어·타동사)",
+    years: ["2022년 기출(유의표현)"],
+    example: "その経験は子どもたちに大きな影響をあたえた。",
+    exampleReading: "そのけいけんはこどもたちにおおきなえいきょうをあたえた。",
+    exampleMeaning: "그 경험은 아이들에게 큰 영향을 주었습니다."
+  },
+  {
+    word: "グラウンド",
+    reading: "ぐらうんど",
+    meaning: "운동장, 그라운드",
+    pos: "명사·외래어",
+    years: ["2022년 기출(유의표현)"],
+    example: "放課後、生徒たちがグラウンドで練習している。",
+    exampleReading: "ほうかご、せいとたちがぐらうんどでれんしゅうしている。",
+    exampleMeaning: "방과 후 학생들 운동장에서 연습하고 있습니다."
+  },
+  {
+    word: "詳しい",
+    reading: "くわしい",
+    meaning: "자세하다, 정통하다",
+    pos: "い형용사",
+    years: ["2022년 기출(유의표현)"],
+    example: "電車の乗り換えについて詳しい説明を聞いた。",
+    exampleReading: "でんしゃののりかえについてくわしいせつめいをきいた。",
+    exampleMeaning: "전철 환승에 대해 자세한 설명을 들었습니다."
+  },
+  {
+    word: "スケジュール",
+    reading: "すけじゅーる",
+    meaning: "스케줄, 일정",
+    pos: "명사·외래어",
+    years: ["2022년 기출(유의표현)", "예상어휘(외래어)"],
+    example: "旅行のスケジュールをみんなで決めた。",
+    exampleReading: "りょこうのすけじゅーるをみんなできめた。",
+    exampleMeaning: "여행 일정을 다 같이 정했습니다."
+  },
+  {
+    word: "ふだん",
+    reading: "ふだん",
+    meaning: "평소, 늘, 보통 때",
+    pos: "명사·부사",
+    years: ["2022년 기출(유의표현)"],
+    example: "ふだんは電車で通勤しているが、今日は歩いた。",
+    exampleReading: "ふだんはでんしゃでつうきんしているが、きょうはあるいた。",
+    exampleMeaning: "평소에는 전철로 출근하지만 오늘은 걸었습니다."
+  },
+  {
+    word: "おしまいにしましょう",
+    reading: "おしまいにしましょう",
+    meaning: "끝냅시다, 마무리합시다",
+    pos: "관용·표현",
+    years: ["2021년 기출(유의표현)"],
+    example: "そろそろ暗くなったので、今日の練習はおしまいにしましょう。",
+    exampleReading: "そろそろくらくなったので、きょうのれんしゅうはおしまいにしましょう。",
+    exampleMeaning: "슬슬 어두워졌으니 오늘 연습은 끝냅시다."
+  },
+  {
+    word: "さっき",
+    reading: "さっき",
+    meaning: "조금 전에, 방금",
+    pos: "명사·부사",
+    years: ["2021년 기출(유의표현)"],
+    example: "さっき田中さんから電話がかかってきたよ。",
+    exampleReading: "さっきたなかさんからでんわがかかってきたよ。",
+    exampleMeaning: "조금 전에 다나카 씨한테서 전화가 왔어요."
+  },
+  {
+    word: "さまざまな",
+    reading: "さまざまな",
+    meaning: "다양한, 여러 가지의",
+    pos: "관용·표현",
+    synonym: "いろいろな",
+    years: ["2021년 기출(유의표현)"],
+    example: "会場にはさまざまな国の人が集まっている。",
+    exampleReading: "かいじょうにはさまざまなぐにのひとがあつまっている。",
+    exampleMeaning: "행사장에는 다양한 나라 사람들이 모여 있습니다."
+  },
+  {
+    word: "指導する",
+    reading: "しどうする",
+    meaning: "지도하다",
+    pos: "동사(서변·타동사)",
+    years: ["2021년 기출(유의표현)"],
+    example: "経験豊かなコーチが新人を指導する。",
+    exampleReading: "けいけんゆたかなこーちがしんじんをしどうする。",
+    exampleMeaning: "경험이 풍부한 코치가 신인을 지도합니다."
+  },
+  {
+    word: "そっと",
+    reading: "そっと",
+    meaning: "살며시, 조용히",
+    pos: "부사",
+    synonym: "静かに",
+    years: ["2021년 기출(유의표현)"],
+    example: "赤ちゃんを起こさないように、そっと部屋を出た。",
+    exampleReading: "あかちゃんをおこさないように、そっとへやをでた。",
+    exampleMeaning: "아기가 깨지 않도록 살며시 방을 나왔습니다."
+  },
+  {
+    word: "たちました",
+    reading: "たちました",
+    meaning: "지났습니다, 경과했습니다",
+    pos: "동사(오단·자동사)",
+    years: ["2021년 기출(유의표현)"],
+    example: "この町に引っ越してきてから三年がたちました。",
+    exampleReading: "このまちにひっこしてきてからさんねんがたちました。",
+    exampleMeaning: "이 동네로 이사 온 지 3년이 지났습니다."
+  },
+  {
+    word: "おしまい",
+    reading: "おしまい",
+    meaning: "끝, 종료",
+    pos: "명사",
+    years: ["2021년 기출(유의표현)"],
+    example: "これで今日の授業はおしまいです。",
+    exampleReading: "これできょうのじゅぎょうはおしまいです。",
+    exampleMeaning: "이것으로 오늘 수업은 끝입니다."
+  },
+  {
+    word: "きつい",
+    reading: "きつい",
+    meaning: "빡세다, 힘들다, 꽉 끼다",
+    pos: "い형용사",
+    years: ["2021년 기출(유의표현)", "2018년 기출(문맥구성)"],
+    example: "この靴は少しきついので、大きいサイズに変えたい。",
+    exampleReading: "このくつはすこしきついので、おおきいさいずにかえたい。",
+    exampleMeaning: "이 신발은 조금 꽉 끼어서 큰 사이즈로 바꾸고 싶습니다."
+  },
+  {
+    word: "チャンス",
+    reading: "ちゃんす",
+    meaning: "찬스, 기회",
+    pos: "명사·외래어",
+    years: ["2021년 기출(유의표현)"],
+    example: "留学は自分の視野を広げるいいチャンスだ。",
+    exampleReading: "りゅうがくはじぶんのしやをひろげるいいちゃんすだ。",
+    exampleMeaning: "유학은 자신의 시야를 넓힐 좋은 기회입니다."
+  },
+  {
+    word: "かならず",
+    reading: "かならず",
+    meaning: "반드시, 꼭",
+    pos: "부사",
+    years: ["2021년 기출(유의표현)"],
+    example: "出かけるときはかならず鍵をかけてください。",
+    exampleReading: "でかけるときはかならずかぎをかけてください。",
+    exampleMeaning: "외출할 때는 반드시 자물쇠를 잠가 주세요."
+  },
+  {
+    word: "報告する",
+    reading: "ほうこくする",
+    meaning: "보고하다",
+    pos: "동사(서변·타동사)",
+    years: ["2021년 기출(유의표현)"],
+    example: "調査の結果を先生に報告した。",
+    exampleReading: "ちょうさのけっかをせんせいにほうこくした。",
+    exampleMeaning: "조사 결과를 선생님께 보고했습니다."
+  },
 
-  // [문제 4: 유의표현] (괄호 안 유의어/뜻풀이 분리 반영)
-  { word: "おしまいにしましょう", reading: "おしまいにしましょう", meaning: "끝냅시다", pos: "표현", synonym: "終わりにしましょう", years: ["유의표현"], example: "今日はおしまいにしましょう。", exampleReading: "きょうはおしまいにしましょう。", exampleMeaning: "오늘은 끝냅시다." },
-  { word: "終わりにしましょう", reading: "おわりにしましょう", meaning: "끝냅시다", pos: "표현", synonym: "おしまいにしましょう", years: ["유의표현"], example: "そろそろ終わりにしましょう。", exampleReading: "そろそろおわりにしましょう。", exampleMeaning: "슬슬 끝냅시다." },
-  { word: "さっき", reading: "さっき", meaning: "조금 전에", pos: "부사", synonym: "少し前に", years: ["유의표현"], example: "さっき連絡があった。", exampleReading: "さっきれんらくがあった。", exampleMeaning: "조금 전에 연락이 왔다." },
-  { word: "少し前に", reading: "すこしまえに", meaning: "조금 전에", pos: "표현", synonym: "さっき", years: ["유의표현"], example: "少し前に駅を出た。", exampleReading: "すこしまえにえきをでた。", exampleMeaning: "조금 전에 역을 나왔다." },
-  { word: "さまざまな", reading: "さまざまな", meaning: "다양한", pos: "형용사", synonym: "いろいろな", years: ["유의표현"], example: "さまざまな意見がある。", exampleReading: "さまざまなけいけんがある。", exampleMeaning: "다양한 의견이 있다." },
-  { word: "いろいろな", reading: "いろいろな", meaning: "여러 가지의", pos: "형용사", synonym: "さまざまな", years: ["유의표현"], example: "いろいろな本を読む。", exampleReading: "いろいろなほんをよむ。", exampleMeaning: "여러 가지 책을 읽는다." },
-  { word: "指導する", reading: "しどうする", meaning: "지도하다", pos: "동사", years: ["유의표현"], example: "後輩を指導する。", exampleReading: "こうはいをしどうする。", exampleMeaning: "후배를 지도한다." },
-  { word: "そっと", reading: "そっと", meaning: "조용히, 살며시", pos: "부사", synonym: "静かに", years: ["유의표현"], example: "そっとドアを閉める。", exampleReading: "そっとどあをしめる。", exampleMeaning: "살며시 문을 닫는다." },
-  { word: "静かに", reading: "しずかに", meaning: "조용히", pos: "부사", synonym: "そっと", years: ["유의표현"], example: "静かに待つ。", exampleReading: "しずかにまつ。", exampleMeaning: "조용히 기다린다." },
-  { word: "たちました", reading: "たちました", meaning: "지났습니다", pos: "동사", synonym: "過ぎました", years: ["유의표현"], example: "三年がたちました。", exampleReading: "さんねんがたちました。", exampleMeaning: "3년이 지났습니다." },
-  { word: "過ぎました", reading: "すぎました", meaning: "지났습니다", pos: "동사", years: ["유의표현"], example: "時間が過ぎました。", exampleReading: "じかんがすぎました。", exampleMeaning: "시간이 지났습니다." },
-  { word: "おしまい", reading: "おしまい", meaning: "끝", pos: "명사", synonym: "おわり", years: ["유의표현"], example: "これでおしまいです。", exampleReading: "これでおしまいです。", exampleMeaning: "이것으로 끝입니다." },
-  { word: "おわり", reading: "おわり", meaning: "끝", pos: "명사", synonym: "おしまい", years: ["유의표현"], example: "話のおわりまで聞く。", exampleReading: "はなしのおわりまでさく。", exampleMeaning: "이야기 끝까지 듣는다." },
-  { word: "チャンス", reading: "ちゃんす", meaning: "기회", pos: "명사·외래어", synonym: "機会", years: ["유의표현"], example: "いいチャンスをつかむ。", exampleReading: "いいちゃんすをつかむ。", exampleMeaning: "좋은 기회를 잡는다." },
-  { word: "機会", reading: "きかい", meaning: "기회", pos: "명사", synonym: "チャンス", years: ["유의표현"], example: "機会があれば参加したい。", exampleReading: "きかいがあればさんかしたい。", exampleMeaning: "기회가 있으면 참가하고 싶다." },
-  { word: "かならず", reading: "かならず", meaning: "반드시", pos: "부사", years: ["유의표현"], example: "かならず連絡する。", exampleReading: "かならずれんらくする。", exampleMeaning: "반드시 연락한다." },
-  { word: "報告する", reading: "ほうこくする", meaning: "보고하다", pos: "동사", years: ["유의표현"], example: "結果を報告する。", exampleReading: "けっかをほうこくする。", exampleMeaning: "결과를 보고한다." },
-  { word: "あたえる", reading: "あたえる", meaning: "주다, 부여하다", pos: "동사", synonym: "あげる", years: ["유의표현"], example: "影響をあたえる。", exampleReading: "えいきょうをあたえる。", exampleMeaning: "영향을 준다." },
-  { word: "あげる", reading: "あげる", meaning: "주다", pos: "동사", synonym: "あたえる", years: ["유의표현"], example: "花をあげる。", exampleReading: "はなをあげる。", exampleMeaning: "꽃을 준다." },
-  { word: "グラウンド", reading: "ぐらうんど", meaning: "운동장", pos: "명사·외래어", synonym: "運動場", years: ["유의표현"], example: "グラウンドで走る。", exampleReading: "ぐらうんどではしる。", exampleMeaning: "운동장에서 달린다." },
-  { word: "運動場", reading: "うんどうじょう", meaning: "운동장", pos: "명사", synonym: "グラウンド", years: ["유의표현"], example: "運動場に集まる。", exampleReading: "うんどうじょうにあつまる。", exampleMeaning: "운동장에 모인다." },
-  { word: "詳しい", reading: "くわしい", meaning: "자세하다", pos: "형용사", years: ["유의표현"], example: "詳しい説明を聞く。", exampleReading: "くわしいせつめいをきく。", exampleMeaning: "자세한 설명을 듣는다." },
-  { word: "スケジュール", reading: "すけじゅーる", meaning: "예정, 일정", pos: "명사·외래어", synonym: "予定", years: ["유의표현", "외래어"], example: "スケジュールを確認する。", exampleReading: "すけじゅーるをかくにんする。", exampleMeaning: "일정을 확인한다." },
-  { word: "予定", reading: "よてい", meaning: "예정", pos: "명사·동사", years: ["유의표현"], example: "週末の予定を立てる。", exampleReading: "しゅうまつのよていをたてる。", exampleMeaning: "주말 일정을 세운다." },
-  { word: "ふだん", reading: "ふだん", meaning: "평소", pos: "명사·부사", synonym: "普段", years: ["유의표현"], example: "ふだん通りに過ごす。", exampleReading: "ふだんどおりにすごす。", exampleMeaning: "평소대로 지낸다." },
-  { word: "普段", reading: "ふだん", meaning: "평소", pos: "명사·부사", synonym: "ふだん", years: ["유의표현"], example: "普段から運動する。", exampleReading: "ふだんからうんどうする。", exampleMeaning: "평소부터 운동한다." },
-  { word: "一流の", reading: "いちりゅうの", meaning: "일류의", pos: "형용사", years: ["유의표현"], example: "一流の技術を持つ。", exampleReading: "いちりゅうのぎじゅつをもつ。", exampleMeaning: "일류 기술을 가진다." },
-  { word: "売り切れました", reading: "うりきれました", meaning: "매진되었습니다", pos: "동사", years: ["유의표현"], example: "パンは売り切れました。", exampleReading: "ぱんはうりきれました。", exampleMeaning: "빵은 매진되었습니다." },
-  { word: "カーブしている", reading: "かーぶしている", meaning: "굽어 있다", pos: "동사·외래어", synonym: "曲がっている", years: ["유의표현"], example: "道がカーブしている。", exampleReading: "みちがかーぶしている。", exampleMeaning: "길이 굽어 있다." },
-  { word: "曲がっている", reading: "まがっている", meaning: "굽어 있다", pos: "동사", synonym: "カーブしている", years: ["유의표현"], example: "先で曲がっている。", exampleReading: "さきでまがっている。", exampleMeaning: "앞에서 굽어 있다." },
-  { word: "検討して", reading: "けんとうして", meaning: "검토해서", pos: "동사", years: ["유의표현"], example: "内容をよく検討して決める。", exampleReading: "ないようをよくけんとうしてきめる。", exampleMeaning: "내용을 잘 검토해 결정한다." },
-  { word: "バックしてください", reading: "ばっくしてください", meaning: "뒤로 물러나 주세요", pos: "표현·외래어", synonym: "後ろに下がってください", years: ["유의표현"], example: "少しバックしてください。", exampleReading: "すこしぱっくしてください。", exampleMeaning: "조금 뒤로 물러나 주세요." },
-  { word: "後ろに下がってください", reading: "うしろにさがってください", meaning: "뒤로 물러나 주세요", pos: "표현", synonym: "バックしてください", years: ["유의표현"], example: "線より後ろに下がってください。", exampleReading: "せんよりうしろにさがってください。", exampleMeaning: "선보다 뒤로 물러나 주세요." },
-  { word: "ゆるい", reading: "ゆるい", meaning: "헐렁하다, 엄격하지 않다", pos: "형용사", synonym: "厳しくない", years: ["유의표현", "용법"], example: "サイズがゆるい。", exampleReading: "さいずがゆるい。", exampleMeaning: "사이즈가 헐렁하다." },
-  { word: "厳しくない", reading: "きびしくない", meaning: "엄격하지 않다", pos: "형용사", synonym: "ゆるい", years: ["유의표현"], example: "ルールは厳しくない。", exampleReading: "るーるはきびしくない。", exampleMeaning: "규칙은 엄격하지 않다." },
-  { word: "ようやく", reading: "ようやく", meaning: "겨우, 마침내", pos: "부사", synonym: "やっと", years: ["유의표현"], example: "ようやく着いた。", exampleReading: "ようやくついた。", exampleMeaning: "겨우 도착했다." },
-  { word: "やっと", reading: "やっと", meaning: "겨우", pos: "부사", synonym: "ようやく", years: ["유의표현"], example: "やっと終わった。", exampleReading: "やっとおわった。", exampleMeaning: "겨우 끝났다." },
-  { word: "サイズ", reading: "さいず", meaning: "크기, 사이즈", pos: "명사·외래어", synonym: "大きさ", years: ["유의표현"], example: "服のサイズを測る。", exampleReading: "ふくのさいずをはかる。", exampleMeaning: "옷 사이즈를 잰다." },
-  { word: "大きさ", reading: "おおきさ", meaning: "크기", pos: "명사", synonym: "サイズ", years: ["유의표현"], example: "箱の大きさを調べる。", exampleReading: "はこのおおきさをしらべる。", exampleMeaning: "상자 크기를 조사한다." },
-  { word: "だまっていた", reading: "だまっていた", meaning: "말하지 않았다", pos: "동사", synonym: "話さなかった", years: ["유의표현"], example: "最後までだまっていた。", exampleReading: "さいごまでだまっていた。", exampleMeaning: "끝까지 말하지 않았다." },
-  { word: "話さなかった", reading: "はなさなかった", meaning: "말하지 않았다", pos: "동사", synonym: "だまっていた", years: ["유의표현"], example: "理由を話さなかった。", exampleReading: "りゆうをはなさなかった。", exampleMeaning: "이유를 말하지 않았다." },
-  { word: "どならないで", reading: "どならないで", meaning: "고함지르지 마", pos: "동사", synonym: "大声で怒らないで", years: ["유의표현"], example: "大きな声でどならないで。", exampleReading: "おおきなこえでどならないで。", exampleMeaning: "큰 소리로 고함지르지 마." },
-  { word: "配達する", reading: "はいたつする", meaning: "배달하다", pos: "동사", synonym: "届ける", years: ["유의표현"], example: "新聞を配達する。", exampleReading: "しんぶんをはいたつする。", exampleMeaning: "신문을 배달한다." },
-  { word: "届ける", reading: "とどける", meaning: "전하다, 배달하다", pos: "동사", years: ["유의표현"], example: "荷物を届ける。", exampleReading: "にもつをとどける。", exampleMeaning: "짐을 배달한다." },
-  { word: "ベストだ", reading: "べすとだ", meaning: "가장 좋다", pos: "형용사·외래어", synonym: "最もよい", years: ["유의표현"], example: "それがベストだ。", exampleReading: "それがべすとだ。", exampleMeaning: "그것이 최선이다." },
-  { word: "最もよい", reading: "もっともよい", meaning: "가장 좋다", pos: "형용사", synonym: "ベストだ", years: ["유의표현"], example: "最もよい方法を選ぶ。", exampleReading: "もっともよいほうほうをえらぶ。", exampleMeaning: "가장 좋은 방법을 고른다." },
-  { word: "おこづかい", reading: "おこづかい", meaning: "용돈", pos: "명사", synonym: "小遣い", years: ["유의표현"], example: "おこづかいをもらう。", exampleReading: "おこづかいをもらう。", exampleMeaning: "용돈을 받는다." },
-  { word: "小遣い", reading: "こづかい", meaning: "용돈", pos: "명사", synonym: "おこづかい", years: ["유의표현"], example: "小遣いをためる。", exampleReading: "こづかいをためる。", exampleMeaning: "용돈을 모은다." },
-  { word: "回収する", reading: "かいしゅうする", meaning: "회수하다", pos: "동사", years: ["유의표현"], example: "用紙を回収する。", exampleReading: "ようしをかいしゅうする。", exampleMeaning: "용지를 회수한다." },
-  { word: "くらべて", reading: "くらべて", meaning: "비교해서", pos: "동사", years: ["유의표현"], example: "去年とくらべてみる。", exampleReading: "きょねんとくらべてみる。", exampleMeaning: "작년과 비교해 본다." },
-  { word: "ちょうど", reading: "ちょうど", meaning: "딱, 마침", pos: "부사", years: ["유의표현"], example: "ちょうどいい時間だ。", exampleReading: "ちょうどいいじかんだ。", exampleMeaning: "딱 좋은 시간이다." },
-  { word: "ほとんど", reading: "ほとんど", meaning: "거의", pos: "부사·명사", years: ["유의표현", "부사"], example: "ほとんど終わった。", exampleReading: "ほとんどおわった。", exampleMeaning: "거의 끝났다." },
-  { word: "いきなり", reading: "いきなり", meaning: "갑자기", pos: "부사", years: ["유의표현", "부사"], example: "いきなり走り出した。", exampleReading: "いきなりはしりだした。", exampleMeaning: "갑자기 달리기 시작했다." },
-  { word: "少しずつ", reading: "すこしずつ", meaning: "조금씩", pos: "부사", years: ["유의표현"], example: "少しずつ進む。", exampleReading: "すこしずつすすむ。", exampleMeaning: "조금씩 나아간다." },
-  { word: "わけ", reading: "わけ", meaning: "이유, 까닭", pos: "명사", synonym: "理由", years: ["유의표현"], example: "休んだわけを聞く。", exampleReading: "やすんだわけをきく。", exampleMeaning: "쉰 이유를 묻는다." },
-  { word: "理由", reading: "りゆう", meaning: "이유", pos: "명사", years: ["유의표현"], example: "理由を説明する。", exampleReading: "りゆうをせつめいする。", exampleMeaning: "이유를 설명한다." },
-  { word: "おそろしい", reading: "おそろしい", meaning: "무섭다", pos: "형용사", synonym: "こわい", years: ["유의표현"], example: "おそろしい体験をした。", exampleReading: "おそろしいたいけんをした。", exampleMeaning: "무서운 체험을 했다." },
-  { word: "こわい", reading: "こわい", meaning: "무섭다", pos: "형용사", synonym: "おそろしい", years: ["유의표현"], example: "暗い道がこわい。", exampleReading: "くらいみちがこわい。", exampleMeaning: "어두운 길이 무섭다." },
-  { word: "減る", reading: "へる", meaning: "줄어들다", pos: "동사", years: ["유의표현", "용법"], example: "人が減る。", exampleReading: "ひとがへる。", exampleMeaning: "사람이 줄어든다." },
-  { word: "楽だ", reading: "らくだ", meaning: "편하다", pos: "형용사", years: ["유의표현"], example: "気持ちがとても楽だ。", exampleReading: "きもちがとてもらくだ。", exampleMeaning: "기분이 매우 편하다." },
-  { word: "あらゆる", reading: "あらゆる", meaning: "모든, 온갖", pos: "표현", synonym: "すべての", years: ["유의표현"], example: "あらゆる方法を試す。", exampleReading: "あらゆるほうほうをためす。", exampleMeaning: "모든 방법을 시도한다." },
-  { word: "協力する", reading: "きょうりょくする", meaning: "협력하다", pos: "동사", years: ["유의표현"], example: "みんなで協力する。", exampleReading: "みんなできょうりょくする。", exampleMeaning: "다 같이 협력한다." },
-  { word: "まぶしい", reading: "まぶしい", meaning: "눈부시다", pos: "형용사", years: ["유의표현"], example: "朝日やまぶしい。", exampleReading: "あさひやまぶしい。", exampleMeaning: "아침 햇살이 눈부시다." },
-  { word: "約", reading: "やく", meaning: "약, 대략", pos: "부사", years: ["유의표현"], example: "約十分かかる。", exampleReading: "やくじゅっぷんかかる。", exampleMeaning: "약 10분 걸린다." },
-  { word: "かけてきた", reading: "かけてきた", meaning: "달려왔다", pos: "동사", synonym: "走ってきた", years: ["유의표현"], example: "駅までかけてきた。", exampleReading: "えきまでかけてきた。", exampleMeaning: "역까지 달려왔다." },
-  { word: "走ってきた", reading: "はしってきた", meaning: "달려왔다", pos: "동사", synonym: "かけてきた", years: ["유의표현"], example: "急いで走ってきた。", exampleReading: "いそいではしってきた。", exampleMeaning: "서둘러 달려왔다." },
-  { word: "しゃべらないで", reading: "しゃべらないで", meaning: "말하지 마", pos: "동사", synonym: "話さないで", years: ["유의표현"], example: "静かにしゃべらないで。", exampleReading: "しずかにしゃべらないで。", exampleMeaning: "조용히 말하지 마." },
-  { word: "話さないで", reading: "はなさないで", meaning: "말하지 마", pos: "동사", synonym: "しゃべらないで", years: ["유의표현"], example: "大きな声で話さないで。", exampleReading: "おおきなこえではなさないで。", exampleMeaning: "큰 소리로 말하지 마." },
-  { word: "やり方", reading: "やりかた", meaning: "방법", pos: "명사", synonym: "方法", years: ["유의표현"], example: "やり方を教える。", exampleReading: "やりかたをおしえる。", exampleMeaning: "방법을 가르친다." },
-  { word: "方法", reading: "ほうほう", meaning: "방법", pos: "명사", synonym: "やり方", years: ["유의표현"], example: "いい方法を考える。", exampleReading: "いいほうほうをかんがえる。", exampleMeaning: "좋은 방법을 생각한다." },
-  { word: "団体で", reading: "だんたいで", meaning: "단체로", pos: "부사", years: ["유의표현"], example: "団体で見学する。", exampleReading: "だんたいで見学する。", exampleMeaning: "단체로 견학한다." },
-  { word: "べらべらです", reading: "べらべらです", meaning: "유창합니다", pos: "형용사", synonym: "上手に話せます", years: ["유의표현"], example: "日本語がべらべらです。", exampleReading: "にほんごがべらべらです。", exampleMeaning: "일본어가 유창합니다." },
-  { word: "あまりました", reading: "あまりました", meaning: "남았습니다", pos: "동사", years: ["유의표현"], example: "少しあまりました。", exampleReading: "すこしあまりました。", exampleMeaning: "조금 남았습니다." },
-  { word: "禁止です", reading: "きんしです", meaning: "금지입니다", pos: "표현", years: ["유의표현"], example: "ここは禁止です。", exampleReading: "ここはきんしです。", exampleMeaning: "여기는 금지입니다." },
-  { word: "がっかりした", reading: "がっかりした", meaning: "실망했다", pos: "동사", synonym: "残念だと思った", years: ["유의표현"], example: "結果を見てがっかりした。", exampleReading: "けっかをみてがっかりした。", exampleMeaning: "결과를 보고 실망했다." },
-  { word: "決まり", reading: "きまり", meaning: "규칙, 정해짐", pos: "명사", years: ["유의표현"], example: "学校の決まりを守る。", exampleReading: "がっこうのきまりをまもる。", exampleMeaning: "학교 규칙을 지킨다." },
-  { word: "まったく", reading: "まったく", meaning: "전혀", pos: "부사", synonym: "ぜんぜん", years: ["유의표현"], example: "まったくわからなかった。", exampleReading: "まったくわからなかった。", exampleMeaning: "전혀 몰랐다." },
-  { word: "学んでいる", reading: "まなんでいる", meaning: "배우고 있다", pos: "동사", synonym: "勉強している", years: ["유의표현"], example: "言葉を学んでいる。", exampleReading: "ことばをまなんでいる。", exampleMeaning: "말을 배우고 있다." },
-  { word: "相変わらず", reading: "あいかわらず", meaning: "여전히", pos: "부사", years: ["유의표현"], example: "相変わらず元気だ。", exampleReading: "あいかわらずげんきだ。", exampleMeaning: "여전히 건강하다." },
-  { word: "疑っている", reading: "うたがっている", meaning: "의심하고 있다", pos: "동사", years: ["유의표현"], example: "まだ疑っている。", exampleReading: "まだうたがっている。", exampleMeaning: "아직 의심하고 있다." },
-  { word: "だまって", reading: "だまって", meaning: "가만히, 말없이", pos: "동사", synonym: "何も話さないで", years: ["유의표현"], example: "だまって座る。", exampleReading: "だまってすわる。", exampleMeaning: "말없이 앉는다." },
-  { word: "すぐ怒る", reading: "すぐおこる", meaning: "금방 화내다", pos: "표현", synonym: "短気だ", years: ["유의표현"], example: "すぐ怒る人だ。", exampleReading: "すぐおこるひとだ。", exampleMeaning: "금방 화내는 사람이다." },
-  { word: "短気だ", reading: "たんきだ", meaning: "성격이 급하다", pos: "형용사", synonym: "すぐ怒る", years: ["유의표현"], example: "彼は少し短気だ。", exampleReading: "かれはすこしたんきだ。", exampleMeaning: "그는 조금 성질이 급하다." },
-  { word: "配達してもらった", reading: "はいたつしてもらった", meaning: "배달받았다", pos: "표현", synonym: "届けてもらった", years: ["유의표현"], example: "家まで配達してもらった。", exampleReading: "いえまではいたつしてもらった。", exampleMeaning: "집까지 배달받았다." },
-  { word: "むすぶ", reading: "むすぶ", meaning: "묶다, 맺다", pos: "동사", years: ["유의표현"], example: "ひもをむすぶ。", exampleReading: "ひもをむすぶ。", exampleMeaning: "끈을 묶는다." },
-  { word: "おわる", reading: "おわる", meaning: "끝나다", pos: "동사", years: ["유의표현", "동사"], example: "授業がおわる。", exampleReading: "じゅぎょうがおわる。", exampleMeaning: "수업이 끝난다." },
-  { word: "える", reading: "える", meaning: "얻다", pos: "동사", years: ["유의표현"], example: "知識をえる。", exampleReading: "ちしきをえる。", exampleMeaning: "지식을 얻는다." },
-  { word: "くたびれる", reading: "くたびれる", meaning: "지치다", pos: "동사", synonym: "つかれる", years: ["유의표현"], example: "働いてくたびれる。", exampleReading: "はたらいてくたびれる。", exampleMeaning: "일해서 지친다." },
-  { word: "している", reading: "している", meaning: "하고 있다", pos: "동사", years: ["유의표현"], example: "練習している。", exampleReading: "れんしゅうしている。", exampleMeaning: "연습하고 있다." },
-  { word: "たまっている", reading: "たまっている", meaning: "쌓여 있다", pos: "동사", years: ["유의표현"], example: "仕事がたまっている。", exampleReading: "しごとがたまっている。", exampleMeaning: "일이 쌓여 있다." },
-  { word: "すぐる", reading: "すぐる", meaning: "지나다", pos: "동사", years: ["유의표현"], example: "時がすぐる。", exampleReading: "ときがすぐる。", exampleMeaning: "시간이 지난다." },
-  { word: "わかりやすい", reading: "わかりやすい", meaning: "알기 쉽다", pos: "형용사", years: ["유의표현"], example: "わかりやすい説明だ。", exampleReading: "わかりやすいせつめいだ。", exampleMeaning: "알기 쉬운 설명이다." },
-  { word: "まご", reading: "まご", meaning: "손자, 손녀", pos: "명사", synonym: "孫", years: ["유의표현"], example: "まごと遊ぶ。", exampleReading: "まごとあそぶ。", exampleMeaning: "손자와 논다." },
-  { word: "孫", reading: "まご", meaning: "손자, 손녀", pos: "명사", synonym: "まご", years: ["유의표현"], example: "孫に会う。", exampleReading: "まごにあう。", exampleMeaning: "손자를 만난다." },
-  { word: "次第に", reading: "しだいに", meaning: "점차", pos: "부사", years: ["유의표현"], example: "次第に暖かくなる。", exampleReading: "しだいになたたかくなる。", exampleMeaning: "점차 따뜻해진다." },
-  { word: "全部", reading: "ぜんぶ", meaning: "전부", pos: "명사·부사", years: ["유의표현"], example: "全部食べた。", exampleReading: "ぜんぶたべた。", exampleMeaning: "전부 먹었다." },
-  { word: "手伝って", reading: "てつだって", meaning: "도와서", pos: "동사", years: ["유의표현"], example: "片付けを手伝ってくれた。", exampleReading: "かたづけをてつだってくれた。", exampleMeaning: "정리를 도와주었다." },
-  { word: "欠点", reading: "けってん", meaning: "결점", pos: "명사", synonym: "わるいところ", years: ["유의표현"], example: "欠点を直す。", exampleReading: "けってんをなおす。", exampleMeaning: "결점을 고친다." },
-  { word: "まなんでいる", reading: "まなんでいる", meaning: "배우고 있다", pos: "동사", synonym: "勉強している", years: ["유의표현"], example: "日本語をまなんでいる。", exampleReading: "にほんごをまなんでいる。", exampleMeaning: "일본어를 배우고 있다." },
-  { word: "どなった", reading: "どなった", meaning: "고함쳤다", pos: "동사", years: ["유의표현"], example: "大きな声でどなった。", exampleReading: "おおきなこえでどなった。", exampleMeaning: "큰 소리로 고함쳤다." },
-  { word: "済ませてください", reading: "すませてください", meaning: "마쳐 주세요", pos: "표현", years: ["유의표현"], example: "今日中に済ませてください。", exampleReading: "きょうじゅうにすませてください。", exampleMeaning: "오늘 안에 마쳐 주세요." },
-  { word: "サービス", reading: "さーびす", meaning: "서비스", pos: "명사·외래어", years: ["유의표현", "외래어"], example: "無料サービスがある。", exampleReading: "むりょうさーびすがある。", exampleMeaning: "무료 서비스가 있다." },
-  { word: "そのまま", reading: "そのまま", meaning: "그대로", pos: "부사·명사", synonym: "何も変えないで", years: ["유의표현", "부사"], example: "そのまま置いておく。", exampleReading: "そのままおいておく。", exampleMeaning: "그대로 두다." },
-  { word: "あまり", reading: "あまり", meaning: "별로", pos: "부사", years: ["유의표현"], example: "あまり難しくない。", exampleReading: "あまりむずかしくない。", exampleMeaning: "별로 어렵지 않다." },
-  { word: "へった", reading: "へった", meaning: "줄어들었다", pos: "동사", years: ["유의표현"], example: "人数がへった。", exampleReading: "にんずうがへった。", exampleMeaning: "인원이 줄어들었다." },
-  { word: "明けたら", reading: "あけたら", meaning: "끝나면, 밝으면", pos: "동사", synonym: "終わったら", years: ["유의표현"], example: "休みが明けたら始まる。", exampleReading: "やすみがあけたらはじまる。", exampleMeaning: "휴일이 끝나면 시작한다." },
-  { word: "ぜんぜん", reading: "ぜんぜん", meaning: "전혀", pos: "부사", synonym: "まったく", years: ["유의표현"], example: "ぜんぜん眠くない。", exampleReading: "ぜんぜんねむくない。", exampleMeaning: "전혀 졸리지 않다." },
-  { word: "くたびれた", reading: "くたびれた", meaning: "지쳤다", pos: "동사", synonym: "つかれた", years: ["유의표현"], example: "今日はくたびれた。", exampleReading: "きょうはくたびれた。", exampleMeaning: "오늘은 지쳤다." },
-  { word: "注文した", reading: "ちゅうもんした", meaning: "주문했다", pos: "동사", synonym: "たのんだ", years: ["유의표현"], example: "料理を注文した。", exampleReading: "りょうりをちゅうもんした。", exampleMeaning: "요리를 주문했다." },
-  { word: "共通点", reading: "きょうつうてん", meaning: "공통점", pos: "명사", years: ["유의표현"], example: "共通点を探す。", exampleReading: "きょうつうてんをさがす。", exampleMeaning: "공통점을 찾는다." },
-  { word: "かがやいています", reading: "かがやいています", meaning: "빛나고 있습니다", pos: "동사", years: ["유의표현"], example: "星がかがやいています。", exampleReading: "ほしががかやいています。", exampleMeaning: "별이 빛나고 있습니다." },
-  { word: "多少", reading: "たしょう", meaning: "다소, 약간", pos: "부사·명사", years: ["유의표현"], example: "多少時間がかかる。", exampleReading: "たしょうじかんがかかる。", exampleMeaning: "다소 시간이 걸린다." },
-  { word: "食欲", reading: "しょくよく", meaning: "식욕", pos: "명사", years: ["유의표현"], example: "食欲がある。", exampleReading: "しょくよくがある。", exampleMeaning: "식욕이 있다." },
+  // [2020년 기출]
+  {
+    word: "解ける",
+    reading: "とける",
+    meaning: "풀리다, 녹다",
+    pos: "동사(일어·자동사)",
+    years: ["2020년 기출(한자읽기)"],
+    example: "長年の疑問がようやく解けた。",
+    exampleReading: "ながねんのぎもんがようやくあけた。",
+    exampleMeaning: "오랜 의문이 겨우 풀렸습니다."
+  },
+  {
+    word: "聞く",
+    reading: "きく",
+    meaning: "듣다, 묻다",
+    pos: "동사(오단·타동사)",
+    years: ["2020년 기출(한자읽기)"],
+    example: "分からない言葉を先生に聞く。",
+    exampleReading: "わからないことばをせんせいにきく。",
+    exampleMeaning: "모르는 단어를 선생님께 묻습니다."
+  },
+  {
+    word: "調べる",
+    reading: "しらべる",
+    meaning: "조사하다, 찾아보다",
+    pos: "동사(일어·타동사)",
+    years: ["2020년 기출(한자읽기)"],
+    example: "旅行の前にバスの時刻を調べた。",
+    exampleReading: "りょこうのまえにばすのじこくをしらべた。",
+    exampleMeaning: "여행 전에 버스 시간을 조사했습니다."
+  },
+  {
+    word: "助ける",
+    reading: "たすける",
+    meaning: "돕다, 구하다",
+    pos: "동사(일어·타동사)",
+    years: ["2020년 기출(한자읽기)"],
+    example: "重い荷物を運ぶのを手伝って助かった。",
+    exampleReading: "おもいにもつをはこぶのをてつだってあわすかった。",
+    exampleMeaning: "무거운 짐을 옮기는 것을 도와줘서 살았습니다."
+  },
+  {
+    word: "あくび",
+    reading: "あくび",
+    meaning: "하품",
+    pos: "명사·동사",
+    years: ["2020년 기출(문맥구성)"],
+    example: "眠くなったので、思わず大きなあくびが出た。",
+    exampleReading: "ねむくなったので、おもわずおおきなああくびがでた。",
+    exampleMeaning: "졸음이 와서 무심코 큰 하품이 나왔습니다."
+  },
+  {
+    word: "登場",
+    reading: "とうじょう",
+    meaning: "등장",
+    pos: "명사·동사",
+    years: ["2020년 기출(문맥구성)"],
+    example: "物語の終盤に新しい登場人物が現れる。",
+    exampleReading: "ものがたりのしゅうばんにあたらしいとうじょうじんぶつがあらわれる。",
+    exampleMeaning: "이야기 후반부에 새로운 등장인물이 나타납니다."
+  },
+  {
+    word: "配達",
+    reading: "はいたつ",
+    meaning: "배달",
+    pos: "명사·동사",
+    years: ["2020년 기출(문맥구성)"],
+    example: "ネットで買った本が午前中に配達された。",
+    exampleReading: "ねっとでかったほんがごぜんちゅうにはいたつされた。",
+    exampleMeaning: "인터넷으로 산 책이 오전에 배달되었습니다."
+  },
+  {
+    word: "引き受ける",
+    reading: "ひきうける",
+    meaning: "맡다, 떠맡다, 수락하다",
+    pos: "동사(일어·타동사)",
+    years: ["2020년 기출(문맥구성)", "2010년 기출(용법)"],
+    example: "文化祭の司会を快く引き受けた。",
+    exampleReading: "ぶんかさいのしかいをこころよくひきうけた。",
+    exampleMeaning: "문화제 사회를 흔쾌히 맡았습니다."
+  },
+  {
+    word: "ぴったり",
+    reading: "ぴったり",
+    meaning: "딱 맞음",
+    pos: "부사",
+    years: ["2020년 기출(문맥구성)"],
+    example: "この靴は私の足にぴったりだ。",
+    exampleReading: "このくつはわたしのあしにぴったりだ。",
+    exampleMeaning: "이 신발은 내 발에 딱 맞습니다."
+  },
+  {
+    word: "ユーモア",
+    reading: "ゆーもあ",
+    meaning: "유머",
+    pos: "명사·외래어",
+    years: ["2020년 기출(문맥구성)", "2010년 기출(용법)"],
+    example: "彼はユーモアがあって、話していると楽しい。",
+    exampleReading: "かれはゆーもあがあって、はなしているとたのしい。",
+    exampleMeaning: "그는 유머가 있어서 이야기하면 즐겁습니다."
+  },
+  {
+    word: "楽だ",
+    reading: "らくだ",
+    meaning: "편하다, 수월하다",
+    pos: "な형용사",
+    years: ["2020년 기출(유의표현)"],
+    example: "車があると買い物に行くのがとても楽だ。",
+    exampleReading: "くるまがあるとかいものにいくのがとてもらくだ。",
+    exampleMeaning: "차가 있으면 장 보러 가기가 매우 편합니다."
+  },
+  {
+    word: "あらゆる",
+    reading: "あらゆる",
+    meaning: "온갖, 모든",
+    pos: "관용·표현",
+    synonym: "すべての",
+    years: ["2020년 기출(유의표현)"],
+    example: "この資料にはあらゆる可能性が書かれている。",
+    exampleReading: "このしりょうにはあらゆるかのうせいがかかかれている。",
+    exampleMeaning: "이 자료에는 온갖 가능성이 적혀 있습니다."
+  },
+  {
+    word: "協力する",
+    reading: "きょうりょくする",
+    meaning: "협력하다",
+    pos: "동사(서변·타동사)",
+    years: ["2020년 기출(유의표현)"],
+    example: "クラス全員が協力してイベントを成功させた。",
+    exampleReading: "くらすぜんいんがきょうりょくしていべんとをせいこうさせた。",
+    exampleMeaning: "반 전원이 협력해 이벤트를 성공시켰습니다."
+  },
+  {
+    word: "まぶしい",
+    reading: "まぶしい",
+    meaning: "눈부시다",
+    pos: "い형용사",
+    years: ["2020년 기출(유의표현)"],
+    example: "夏の朝日がまぶしくて目が覚めた。",
+    exampleReading: "なつのあさひがまぶしくてめがさめた。",
+    exampleMeaning: "여름 아침 햇살이 눈부셔서 눈이 떠졌습니다."
+  },
+  {
+    word: "約",
+    reading: "やく",
+    meaning: "약, 대략",
+    pos: "접사·접두어",
+    years: ["2020년 기출(유의표현)"],
+    example: "会場までは駅から約十分かかる。",
+    exampleReading: "かいじょうまではえきからやくじゅっぷんかかる。",
+    exampleMeaning: "행사장까지는 역에서 약 10분 걸립니다."
+  },
+  {
+    word: "通り過ぎる",
+    reading: "とおりすぎる",
+    meaning: "지나가다, 지나쳐 버리다",
+    pos: "동사(일어·자동사)",
+    years: ["2020년 기출(용법)"],
+    example: "スマホを見ていて、降りる駅を通り過ぎてしまった。",
+    exampleReading: "すまほをみていて、おりるえきをとおりすぎてしまった。",
+    exampleMeaning: "스마트폰을 보다가 내릴 역을 지나쳐 버렸습니다."
+  },
+  {
+    word: "長く",
+    reading: "ながく",
+    meaning: "오래, 길게",
+    pos: "부사",
+    years: ["2020년 기출(용법)"],
+    example: "この時計は長く使える丈夫な作りだ。",
+    exampleReading: "このとけいはながくつかえるじょうぶなつくりだ。",
+    exampleMeaning: "이 시계는 오래 쓸 수 있는 튼튼한 구조입니다."
+  },
+  {
+    word: "オーバー",
+    reading: "おーばー",
+    meaning: "오버, 제한 초과, 과장",
+    pos: "명사·동사·외래어",
+    years: ["2020년 기출(용법)"],
+    example: "荷物の重さが制限をオーバーしてしまった。",
+    exampleReading: "にもつのおもさがせいげんをおーばーしてしまった。",
+    exampleMeaning: "짐 무게가 제한을 초과해 버렸습니다."
+  },
+  {
+    word: "だるい",
+    reading: "だるい",
+    meaning: "나른하다, 몸이 무겁다",
+    pos: "い형용사",
+    years: ["2020년 기출(용법)"],
+    example: "寝不足のせいで今日は体全体がだるい。",
+    exampleReading: "ねぶそくのせいできょうはからだぜんたいがだるい。",
+    exampleMeaning: "잠이 부족한 탓에 오늘은 몸 전체가 나른합니다."
+  },
+  {
+    word: "気づく",
+    reading: "きづく",
+    meaning: "깨닫다, 눈치채다",
+    pos: "동사(오단·자동사)",
+    years: ["2020년 기출(용법)"],
+    example: "家を出たあとで、財布を忘れたことに気づいた。",
+    exampleReading: "いえをでたあとで、さいふをわすれたことにきづいた。",
+    exampleMeaning: "집을 나선 뒤에 지갑을 잊어버린 것을 깨달았습니다."
+  },
+  {
+    word: "ふらふら",
+    reading: "ふらふら",
+    meaning: "비틀거리다, 어지럽다",
+    pos: "부사",
+    years: ["2020년 기출(용법)", "2010년 기출(문맥구성)"],
+    example: "朝から何も食べていないので、頭がふらふらする。",
+    exampleReading: "あさからなにもたべていないので、あたまがふらふらする。",
+    exampleMeaning: "아침부터 아무것도 먹지 않아서 머리가 어지럽습니다."
+  },
 
-  // [문제 5: 용법]
-  { word: "ばらばら", reading: "ばらばら", meaning: "제각각, 흩어짐", pos: "부사·형용사", years: ["용법", "부사"], example: "意見がばらばらだ。", exampleReading: "いけんがばらばらだ。", exampleMeaning: "의견이 제각각이다." },
-  { word: "変化", reading: "へんか", meaning: "변화", pos: "명사·동사", years: ["용법"], example: "気候の変化を感じる。", exampleReading: "きこうのへんかをかんじる。", exampleMeaning: "기후 변화를 느낀다." },
-  { word: "落ち着く", reading: "おちつく", meaning: "진정되다, 차분해지다", pos: "동사", years: ["용법"], example: "気持ちが落ち着く。", exampleReading: "きもちがおちつく。", exampleMeaning: "기분이 차분해진다." },
-  { word: "活動", reading: "かつどう", meaning: "활동", pos: "명사·동사", years: ["용법"], example: "サークル活動をする。", exampleReading: "さーくるかつどうをする。", exampleMeaning: "동아리 활동을 한다." },
-  { word: "ひびく", reading: "ひびく", meaning: "울리다", pos: "동사", years: ["용법"], example: "声がひびく。", exampleReading: "こえがひびく。", exampleMeaning: "목소리가 울린다." },
-  { word: "実物", reading: "じつぶつ", meaning: "실물", pos: "명사", years: ["용법"], example: "実物を見る。", exampleReading: "じつぶつをみる。", exampleMeaning: "실물을 본다." },
-  { word: "内容", reading: "ないよう", meaning: "내용", pos: "명사", years: ["용법"], example: "本の内容を確認する。", exampleReading: "ほんのないようをかくにんする。", exampleMeaning: "책 내용을 확인한다." },
-  { word: "にこにこ", reading: "にこにこ", meaning: "방긋방긋", pos: "부사", years: ["용법"], example: "にこにこ笑う。", exampleReading: "にこにこわらう。", exampleMeaning: "방긋방긋 웃는다." },
-  { word: "通り過ぎる", reading: "とおりすぎる", meaning: "지나가다", pos: "동사", years: ["용법"], example: "駅を通り過ぎる。", exampleReading: "えきをとおりすぎる。", exampleMeaning: "역을 지나친다." },
-  { word: "長く", reading: "ながく", meaning: "오래, 길게", pos: "형용사·부사", years: ["용법"], example: "長く住んでいる。", exampleReading: "ながくすんでいる。", exampleMeaning: "오래 살고 있다." },
-  { word: "オーバー", reading: "おーばー", meaning: "오버, 초과", pos: "명사·동사·외래어", years: ["용법"], example: "予算をオーバーする。", exampleReading: "よさんをおーばーする。", exampleMeaning: "예산을 초과한다." },
-  { word: "だるい", reading: "だるい", meaning: "나른하다", pos: "형용사", years: ["용법"], example: "体がだるい。", exampleReading: "からだがだるい。", exampleMeaning: "몸이 나른하다." },
-  { word: "電話", reading: "でんわ", meaning: "전화", pos: "명사·동사", years: ["용법"], example: "電話をかける。", exampleReading: "でんわをかける。", exampleMeaning: "전화를 건다." },
-  { word: "める", reading: "める", meaning: "채우다, 묻다", pos: "동사", years: ["용법"], example: "空欄をめる。", exampleReading: "くうらんをめる。", exampleMeaning: "빈칸을 채운다." },
-  { word: "気づく", reading: "きづく", meaning: "깨닫다, 눈치채다", pos: "동사", years: ["용법"], example: "間違いに気づく。", exampleReading: "まちがいにきづく。", exampleMeaning: "실수를 깨닫는다." },
-  { word: "お互いに", reading: "おたがいに", meaning: "서로", pos: "부사·명사", years: ["용법"], example: "お互いに助け合う。", exampleReading: "おたがいにたすけあう。", exampleMeaning: "서로 돕는다." },
-  { word: "かき混ぜる", reading: "かきまぜる", meaning: "휘젓다, 섞다", pos: "동사", years: ["용법"], example: "よくかき混ぜる。", exampleReading: "よくかきまぜる。", exampleMeaning: "잘 휘젓는다." },
-  { word: "参加", reading: "さんか", meaning: "참가", pos: "명사·동사", years: ["용법"], example: "イベントに参加する。", exampleReading: "いべんとにさんかする。", exampleMeaning: "이벤트에 참가한다." },
-  { word: "始める", reading: "はじめる", meaning: "시작하다", pos: "동사", years: ["용법"], example: "仕事を始める。", exampleReading: "しごとをはじめる。", exampleMeaning: "일을 시작한다." },
-  { word: "追いつく", reading: "おいつく", meaning: "따라잡다", pos: "동사", years: ["용법"], example: "前に追いつく。", exampleReading: "まえにおいつく。", exampleMeaning: "앞을 따라잡는다." },
-  { word: "知り合う", reading: "しりあう", meaning: "서로 알게 되다", pos: "동사", years: ["용법"], example: "大学で知り合う。", exampleReading: "だいがくでしりあう。", exampleMeaning: "대학에서 알게 된다." },
-  { word: "受け取る", reading: "うけとる", meaning: "받다", pos: "동사", years: ["용법"], example: "荷物を受け取る。", exampleReading: "にもつをうけとる。", exampleMeaning: "짐을 받는다." },
-  { word: "身につける", reading: "みにつける", meaning: "익히다", pos: "동사", years: ["용법"], example: "力を身につける。", exampleReading: "ちからをみにつける。", exampleMeaning: "실력을 익힌다." },
-  { word: "訪問", reading: "ほうもん", meaning: "방문", pos: "명사·동사", years: ["용법"], example: "会社を訪問する。", exampleReading: "かいしゃをほうもんする。", exampleMeaning: "회사를 방문한다." },
-  { word: "ゆでる", reading: "ゆでる", meaning: "삶다", pos: "동사", years: ["용법"], example: "卵をゆでる。", exampleReading: "たまごをゆでる。", exampleMeaning: "달걀을 삶는다." },
-  { word: "たまる", reading: "たまる", meaning: "쌓이다", pos: "동사", years: ["용법"], example: "疲れがたまる。", exampleReading: "つかれがたまる。", exampleMeaning: "피로가 쌓인다." },
-  { word: "伝わる", reading: "つたわる", meaning: "전해지다", pos: "동사", years: ["용법"], example: "思いが伝わる。", exampleReading: "おもいがつたわる。", exampleMeaning: "마음이 전해진다." },
-  { word: "どなる", reading: "どなる", meaning: "고함지르다", pos: "동사", years: ["용법"], example: "怒ってどなる。", exampleReading: "おこってどなる。", exampleMeaning: "화내며 고함친다." },
-  { word: "効果", reading: "こうか", meaning: "효과", pos: "명사", years: ["용법"], example: "効果が出る。", exampleReading: "こうかがでる。", exampleMeaning: "효과가 나타난다." },
-  { word: "こぼす", reading: "こぼす", meaning: "쏟다, 흘리다", pos: "동사", years: ["용법"], example: "水をこぼす。", exampleReading: "みずをこぼす。", exampleMeaning: "물을 쏟는다." },
-  { word: "発生", reading: "はっせい", meaning: "발생", pos: "명사·동사", years: ["용법"], example: "問題が発生する。", exampleReading: "もんだいがはっせいする。", exampleMeaning: "문제가 발생한다." },
-  { word: "植える", reading: "うえる", meaning: "심다", pos: "동사", years: ["용법"], example: "花を植える。", exampleReading: "はなをうえる。", exampleMeaning: "꽃을 심는다." },
-  { word: "受け入れる", reading: "うけいれる", meaning: "받아들이다", pos: "동사", years: ["용법"], example: "意見を受け入れる。", exampleReading: "いけんをうけいれる。", exampleMeaning: "의견을 받아들인다." },
-  { word: "ころぶ", reading: "ころぶ", meaning: "넘어지다", pos: "동사", years: ["용법"], example: "道でころぶ。", exampleReading: "みちでころぶ。", exampleMeaning: "길에서 넘어진다." },
-  { word: "そろそろ", reading: "そろそろ", meaning: "슬슬, 이제 곧", pos: "부사", years: ["용법"], example: "そろそろ帰ろう。", exampleReading: "そろそろかえろう。", exampleMeaning: "슬슬 돌아가자." },
-  { word: "なだらかだ", reading: "なだらかだ", meaning: "완만하다", pos: "형용사", years: ["용법"], example: "坂がなだらかだ。", exampleReading: "さかがなだらかだ。", exampleMeaning: "언덕이 완만하다." },
-  { word: "はかる", reading: "はかる", meaning: "재다, 측정하다", pos: "동사", years: ["용법"], example: "重さをはかる。", exampleReading: "おもさをはかる。", exampleMeaning: "무게를 잰다." },
-  { word: "まずしい", reading: "まずしい", meaning: "가난하다", pos: "형용사", years: ["용법"], example: "まずしい暮らしだ。", exampleReading: "まずしいくらしだ。", exampleMeaning: "가난한 생활이다." },
-  { word: "頼る", reading: "たよる", meaning: "의지하다", pos: "동사", years: ["용법"], example: "友達に頼る。", exampleReading: "ともだちたよる。", exampleMeaning: "친구에게 의지한다." },
-  { word: "知識", reading: "ちしき", meaning: "지식", pos: "명사", years: ["용법"], example: "知識を増やす。", exampleReading: "ちしきをふやす。", exampleMeaning: "지식을 늘린다." },
-  { word: "重なる", reading: "かさなる", meaning: "겹치다", pos: "동사", years: ["용법"], example: "予定が重なる。", exampleReading: "よていがかさなる。", exampleMeaning: "일정이 겹친다." },
-  { word: "中古", reading: "ちゅうこ", meaning: "중고", pos: "명사", years: ["용법"], example: "中古の本を買う。", exampleReading: "ちゅうこのほんをかう。", exampleMeaning: "중고 책을 산다." },
-  { word: "修理", reading: "しゅうり", meaning: "수리", pos: "명사·동사", years: ["용법"], example: "時計を修理する。", exampleReading: "とけいをしゅうりする。", exampleMeaning: "시계를 수리한다." },
-  { word: "詰める", reading: "つめる", meaning: "채워 넣다", pos: "동사", years: ["용법"], example: "かばんに詰める。", exampleReading: "かばんにつめる。", exampleMeaning: "가방에 채워 넣는다." },
-  { word: "募集", reading: "ぼしゅう", meaning: "모집", pos: "명사·동사", years: ["용법"], example: "参加者を募集する。", exampleReading: "さんかしゃをぼしゅうする。", exampleMeaning: "참가자를 모집한다." },
-  { word: "減らす", reading: "へらす", meaning: "줄이다", pos: "동사", years: ["용법"], example: "量を減らす。", exampleReading: "りょうをへらす。", exampleMeaning: "양을 줄인다." },
-  { word: "進歩", reading: "しんぽ", meaning: "진보", pos: "명사·동사", years: ["용법"], example: "技術が進歩する。", exampleReading: "ぎじゅつがしんぽする。", exampleMeaning: "기술이 진보한다." },
-  { word: "あわてる", reading: "あわてる", meaning: "당황하다", pos: "동사", years: ["용법"], example: "遅れてあわてる。", exampleReading: "おくれてあわてる。", exampleMeaning: "늦어서 당황한다." },
-  { word: "資格", reading: "しかく", meaning: "자격", pos: "명사", years: ["용법"], example: "資格を取る。", exampleReading: "しかくをとる。", exampleMeaning: "자격을 딴다." },
-  { word: "見本", reading: "みほん", meaning: "견본", pos: "명사", years: ["용법"], example: "見本を見る。", exampleReading: "みほんをみる。", exampleMeaning: "견본을 본다." },
-  { word: "重大", reading: "じゅうだい", meaning: "중대하다", pos: "형용사", years: ["용법"], example: "重大な問題だ。", exampleReading: "じゅうだいなおもんだいだ。", exampleMeaning: "중대한 문제다." },
-  { word: "区別", reading: "くべつ", meaning: "구별", pos: "명사·동사", years: ["용법"], example: "二つを区別する。", exampleReading: "ふたつをくべつする。", exampleMeaning: "둘을 구별한다." },
-  { word: "暗記", reading: "あんき", meaning: "암기", pos: "명사·동사", years: ["용법"], example: "言葉を暗記する。", exampleReading: "ことばをあんきする。", exampleMeaning: "말을 암기한다." },
-  { word: "見送る", reading: "みおくる", meaning: "배웅하다", pos: "동사", years: ["용법"], example: "駅で見送る。", exampleReading: "えきでみおくる。", exampleMeaning: "역에서 배웅한다." },
-  { word: "発生する", reading: "はっせいする", meaning: "발생하다", pos: "동사", years: ["용법"], example: "事故が発生する。", exampleReading: "じこがはっせいする。", exampleMeaning: "사고가 발생한다." },
-  { word: "分類", reading: "ぶんるい", meaning: "분류", pos: "명사·동사", years: ["용법"], example: "種類別に分類する。", exampleReading: "しゅるいべつにぶんるいする。", exampleMeaning: "종류별로 분류한다." },
-  { word: "あまる", reading: "あまる", meaning: "남다", pos: "동사", years: ["용법"], example: "時間がかなりあまる。", exampleReading: "じかんがかなりあまる。", exampleMeaning: "시간이 꽤 남는다." },
-  { word: "断る", reading: "ことわる", meaning: "거절하다", pos: "동사", years: ["용법"], example: "頼みを断る。", exampleReading: "たのみをことわる。", exampleMeaning: "부탁을 거절한다." },
-  { word: "なだらか", reading: "なだらか", meaning: "완만함", pos: "형용사", years: ["용법"], example: "なだらかな道だ。", exampleReading: "なだらかなみちだ。", exampleMeaning: "완만한 길이다." },
-  { word: "移動", reading: "いどう", meaning: "이동", pos: "명사·동사", years: ["용법"], example: "会場へ移動する。", exampleReading: "かいじょうへいどうする。", exampleMeaning: "행사장으로 이동한다." },
-  { word: "早退", reading: "そうたい", meaning: "조퇴", pos: "명사·동사", years: ["용법"], example: "体調が悪くて早退する。", exampleReading: "たいちょうがわるくてそうたいする。", exampleMeaning: "컨디션이 안 좋아 조퇴한다." },
-  { word: "満員", reading: "まんいん", meaning: "만원", pos: "명사·형용사", years: ["용법"], example: "電車が満員だ。", exampleReading: "でんしゃがまんいんだ。", exampleMeaning: "전철이 만원이다." },
-  { word: "あずける", reading: "あずける", meaning: "맡기다", pos: "동사", years: ["용법", "표기"], example: "荷物をあずける。", exampleReading: "にもつをあずける。", exampleMeaning: "짐을 맡긴다." },
-  { word: "建設", reading: "けんせつ", meaning: "건설", pos: "명사·동사", years: ["용법"], example: "新しい橋を建設する。", exampleReading: "あたらしいはしをけんせつする。", exampleMeaning: "새 다리를 건설한다." },
-  { word: "在住", reading: "ざいじゅう", meaning: "거주", pos: "명사·동사", years: ["용법"], example: "市内に在住している。", exampleReading: "しないにざいじゅうしている。", exampleMeaning: "시내에 거주하고 있다." },
-  { word: "延期", reading: "えんき", meaning: "연기", pos: "명사·동사", years: ["용법"], example: "予定を延期する。", exampleReading: "よていをえんきする。", exampleMeaning: "예정을 연기한다." },
-  { word: "合う", reading: "あう", meaning: "맞다, 어울리다", pos: "동사", years: ["용법"], example: "意見が合う。", exampleReading: "いけんがあう。", exampleMeaning: "의견이 맞는다." },
-  { word: "指示", reading: "しじ", meaning: "지시", pos: "명사·동사", years: ["용법"], example: "指示に従って動く。", exampleReading: "しじにしたがってうごく。", exampleMeaning: "지시에 따라 움직인다." },
+  // [2019~2010년 기출]
+  {
+    word: "過去",
+    reading: "かこ",
+    meaning: "과거",
+    pos: "명사",
+    years: ["2019년 기출(한자읽기)"],
+    example: "過去のデータをグラフにまとめた。",
+    exampleReading: "かこのでーたをぐらふにまとめた。",
+    exampleMeaning: "과거 데이터를 그래프로 정리했습니다."
+  },
+  {
+    word: "予約",
+    reading: "よやく",
+    meaning: "예약",
+    pos: "명사·동사",
+    years: ["2019년 기출(한자읽기)"],
+    example: "人気のレストランなので、事前に予約した。",
+    exampleReading: "にんきのれすとらんなので、じぜんによやくした。",
+    exampleMeaning: "인기 레스토랑이라서 미리 예약했습니다."
+  },
+  {
+    word: "さっそく",
+    reading: "さっそく",
+    meaning: "곧바로, 즉시",
+    pos: "부사",
+    years: ["2019년 기출(문맥구성)", "예상어휘(부사)"],
+    example: "新しい靴を買ったので、さっそく履いてみた。",
+    exampleReading: "あたらしいくつをかったので、さっそくはいてみた。",
+    exampleMeaning: "새 신발을 사서 곧바로 신어 보았습니다."
+  },
+  {
+    word: "締め切り",
+    reading: "しめきり",
+    meaning: "마감, 마감 기한",
+    pos: "명사",
+    years: ["2019년 기출(문맥구성)", "예상어휘(명사)"],
+    example: "レポートの締め切りは明日の夕方だ。",
+    exampleReading: "れぽーとのしめきりはあしたのゆうがただ。",
+    exampleMeaning: "리포트 마감은 내일 저녁입니다."
+  },
+  {
+    word: "デザイン",
+    reading: "でざいん",
+    meaning: "디자인",
+    pos: "명사·동사·외래어",
+    years: ["2019년 기출(문맥구성)"],
+    example: "このバッグはシンプルでおしゃれなデザインだ。",
+    exampleReading: "このばっぐはしんぷるでおしゃれなでざいんだ。",
+    exampleMeaning: "이 가방은 심플하고 세련된 디자인입니다."
+  },
+  {
+    word: "どきどき",
+    reading: "どきどき",
+    meaning: "두근두근",
+    pos: "부사",
+    years: ["2019년 기출(문맥구성)", "2010년 기출(용법)"],
+    example: "初めての発表の前は、胸がどきどきする。",
+    exampleReading: "はじめてのはっぴょうのまえは、むねがどきどきする。",
+    exampleMeaning: "첫 발표 전에는 가슴이 두근두근합니다."
+  },
+  {
+    word: "取り消す",
+    reading: "とりけす",
+    meaning: "취소하다, 철회하다",
+    pos: "동사(오단·타동사)",
+    years: ["2019년 기출(문맥구성)", "2010년 기출(문맥구성)"],
+    example: "予定が変わったので、ホテルの予約を取り消した。",
+    exampleReading: "よていがかわったので、ほてるのよやくをとりけした。",
+    exampleMeaning: "일정이 바뀌어서 호텔 예약을 취소했습니다."
+  },
+  {
+    word: "ノック",
+    reading: "のっく",
+    meaning: "노크, 두드림",
+    pos: "명사·동사·외래어",
+    years: ["2019년 기출(문맥구성)"],
+    example: "会議室のドアを軽くノックしてから入った。",
+    exampleReading: "かいぎしつのどあをかるくのっくしてからいった。",
+    exampleMeaning: "회의실 문을 가볍게 노크한 뒤 들어갔습니다."
+  },
+  {
+    word: "めんどうくさい",
+    reading: "めんどうくさい",
+    meaning: "귀찮다, 번거롭다",
+    pos: "い형용사",
+    years: ["2019년 기출(문맥구성)"],
+    example: "細かい手続きはめんどうくさいが、きちんとやろう。",
+    exampleReading: "こまかいてつづきはめんどうくさいが、きちんとやろう。",
+    exampleMeaning: "세세한 절차는 번거롭지만 제대로 해 둡시다."
+  },
+  {
+    word: "あふれる",
+    reading: "あふれる",
+    meaning: "넘치다, 가득 차다",
+    pos: "동사(일어·자동사)",
+    years: ["2018년 기출(문맥구성)"],
+    example: "バケツに水を入れすぎて、床にあふれた。",
+    exampleReading: "ばけつにみずをいれすぎて、ゆかにあふれた。",
+    exampleMeaning: "양동이에 물을 너무 많이 넣어서 바닥에 넘쳤습니다."
+  },
+  {
+    word: "意外に",
+    reading: "いがいに",
+    meaning: "의외로",
+    pos: "부사·な형용사",
+    years: ["2018년 기출(문맥구성)"],
+    example: "この道は混んでいるかと思ったが、意外にすいていた。",
+    exampleReading: "このみちはこんでいるかとおもったが、いがいにすいていた。",
+    exampleMeaning: "이 길은 막힐 줄 알았는데 의외로 한산했습니다."
+  },
+  {
+    word: "うっかり",
+    reading: "うっかり",
+    meaning: "깜빡, 무심코",
+    pos: "부사",
+    years: ["2018년 기출(문맥구성)"],
+    example: "急いでいて、うっかり傘を電車に忘れてしまった。",
+    exampleReading: "いそいでいて、うっかりかさをでんしゃにわすれてしまった。",
+    exampleMeaning: "서두르다가 깜빡하고 우산을 전철에 잊어버렸습니다."
+  },
+  {
+    word: "エネルギー",
+    reading: "えねるぎー",
+    meaning: "에너지",
+    pos: "명사·외래어",
+    years: ["2018년 기출(문맥구성)"],
+    example: "再生可能エネルギーの利用が増えている。",
+    exampleReading: "さいせいかのうえねるぎーのりようがふえている。",
+    exampleMeaning: "재생 가능 에너지 이용이 늘고 있습니다."
+  },
+  {
+    word: "重ねる",
+    reading: "かさねる",
+    meaning: "겹치다, 거듭하다",
+    pos: "동사(일어·타동사)",
+    years: ["2018년 기출(문맥구성)"],
+    example: "努力を重ねて、ついに夢をかなえた。",
+    exampleReading: "どりょくをかさねて、ついにゆめをかなえた。",
+    exampleMeaning: "노력을 거듭해서 마침내 꿈을 이루었습니다."
+  },
+  {
+    word: "乾燥",
+    reading: "かんそう",
+    meaning: "건조",
+    pos: "명사·동사",
+    years: ["2018년 기출(문맥구성)"],
+    example: "冬は空気が乾燥するので、ハンドクリームを使う。",
+    exampleReading: "ふゆはくうきがかんそうするので、はんどくりーむをつかう。",
+    exampleMeaning: "겨울에는 공기가 건조해서 핸드크림을 바릅니다."
+  },
+  {
+    word: "原料",
+    reading: "げんりょう",
+    meaning: "원료",
+    pos: "명사",
+    years: ["2018년 기출(문맥구성)", "2010년 기출(용법)"],
+    example: "このお菓子の主な原料はさつまいまだ。",
+    exampleReading: "このおかしのおもなげんりょうはさつまいまだ。",
+    exampleMeaning: "이 과자의 주된 원료는 고구마입니다."
+  },
+  {
+    word: "しっかり",
+    reading: "しっかり",
+    meaning: "단단히, 똑바로, 확실히",
+    pos: "부사",
+    years: ["2018년 기출(문맥구성)"],
+    example: "寝る前に戸締まりをしっかり確認しよう。",
+    exampleReading: "ねるまえにとじまりをしっかりかくにんしよう。",
+    exampleMeaning: "자기 전에 문단속을 확실히 확인합시다."
+  },
+  {
+    word: "薬局",
+    reading: "やっきょく",
+    meaning: "약국",
+    pos: "명사",
+    years: ["2018년 기출(한자읽기)"],
+    example: "帰りに駅前の薬局で薬を買った。",
+    exampleReading: "かえりにえきまえのやっきょくでくすりをかった。",
+    exampleMeaning: "돌아오는 길에 역 앞 약국에서 약을 샀습니다."
+  },
+  {
+    word: "お互いに",
+    reading: "おたがいに",
+    meaning: "서로, 피차",
+    pos: "부사·명사",
+    years: ["2010년 기출(용법)"],
+    example: "困ったときは、お互いに助け合うことが大切だ。",
+    exampleReading: "こまったときは、おたがいにたすけあうことがたいせつだ。",
+    exampleMeaning: "곤란할 때는 서로 돕는 것이 중요합니다."
+  },
+  {
+    word: "かき混ぜる",
+    reading: "かきまぜる",
+    meaning: "휘젓다, 섞다",
+    pos: "동사(일어·타동사)",
+    years: ["2010년 기출(용법)"],
+    example: "コーヒーに砂糖を入れてスプーンでかき混ぜた。",
+    exampleReading: "こーひーにさとうをいれてすぷーんでかきまぜた。",
+    exampleMeaning: "커피에 설탕을 넣고 스푼으로 휘저었습니다."
+  },
+  {
+    word: "身につける",
+    reading: "みにつける",
+    meaning: "익히다, 몸에 붙이다",
+    pos: "동사(일어·타동사)",
+    years: ["2010년 기출(용법)"],
+    example: "毎日練習して英会話の力を身につけた。",
+    exampleReading: "まいにちれんしゅうしてえいかいわのちからをみにつけた。",
+    exampleMeaning: "매일 연습해서 영어 회화 실력을 익혔습니다."
+  },
+  {
+    word: "たまる",
+    reading: "たまる",
+    meaning: "쌓이다, 모이다",
+    pos: "동사(오단·자동사)",
+    years: ["2010년 기출(용법)", "2010년 기출(유의표현)"],
+    example: "休みの日にたまった洗濯物を片付けた。",
+    exampleReading: "やすみのひにたまったせんたくものをかたづけた。",
+    exampleMeaning: "쉬는 날에 쌓인 빨랫감을 치웠습니다."
+  },
+  {
+    word: "伝わる",
+    reading: "つたわる",
+    meaning: "전해지다, 알려지다",
+    pos: "동사(오단·자동사)",
+    years: ["2010년 기출(용법)"],
+    example: "感謝の気持ちが相手によく伝わったと思う。",
+    exampleReading: "かんしゃのきもちがあいてによくつたわったとおもう。",
+    exampleMeaning: "감사의 마음이 상대에게 잘 전해졌다고 생각합니다."
+  },
+  {
+    word: "どなる",
+    reading: "どなる",
+    meaning: "고함지르다, 소리치다",
+    pos: "동사(오단·자동사)",
+    years: ["2010년 기출(용법)", "2010년 기출(유의표현)"],
+    example: "騒いでいたら、近くの人にとどなられた。",
+    exampleReading: "さわいでいたら、ちかくのひとにとどなられた。",
+    exampleMeaning: "떠들었더니 근처 사람에게 고함을 들었습니다."
+  },
+  {
+    word: "そろそろ",
+    reading: "そろそろ",
+    meaning: "슬슬, 이제 곧",
+    pos: "부사",
+    years: ["2010년 기출(용법)"],
+    example: "電車の発車時刻が近いので、そろそろホームへ行こう。",
+    exampleReading: "でんしゃのはっしゃじこくがちかいので、そろそろほーむへいこう。",
+    exampleMeaning: "전철 출발 시각이 가까우니 슬슬 승강장으로 갑시다."
+  },
+  {
+    word: "そっくり",
+    reading: "そっくり",
+    meaning: "쏙 빼닮음, 통째로",
+    pos: "부사·な형용사",
+    years: ["2010년 기출(용법)", "예상어휘(부사)"],
+    example: "彼は父親に顔も声もそっくりだ。",
+    exampleReading: "かれはちちおやにかおもこえもそっくりだ。",
+    exampleMeaning: "그는 아버지와 얼굴도 목소리도 똑같습니다."
+  },
+  {
+    word: "なだらかだ",
+    reading: "なだらかだ",
+    meaning: "완만하다, 순탄하다",
+    pos: "な형용사",
+    years: ["2010년 기출(용법)"],
+    example: "この山の登山道はなだらかで歩きやすい。",
+    exampleReading: "このやまのとざんどうはなだらかであるきやすい。",
+    exampleMeaning: "이 산의 등산로는 완만해서 걷기 쉽습니다."
+  },
 
-  // [예상어휘: 명사]
-  { word: "当たり", reading: "あたり", meaning: "당첨, 주변", pos: "명사", years: ["명사"], example: "駅あたりで待つ。", exampleReading: "えきあたりでまつ。", exampleMeaning: "역 근처에서 기다린다." },
-  { word: "痛み", reading: "いたみ", meaning: "아픔, 통증", pos: "명사", years: ["명사"], example: "痛みが消える。", exampleReading: "いたみがきえる。", exampleMeaning: "통증이 사라진다." },
-  { word: "ごろ", reading: "ごろ", meaning: "무렵, 쯤", pos: "명사", years: ["명사"], example: "夕方ごろ着く。", exampleReading: "ゆうがたごろつく。", exampleMeaning: "저녁 무렵 도착한다." },
-  { word: "受け取り", reading: "うけとり", meaning: "수령, 영수증", pos: "명사", years: ["명사"], example: "受け取りを書く。", exampleReading: "うけとりをかく。", exampleMeaning: "영수증을 쓴다." },
-  { word: "打ち合わせ", reading: "うちあわせ", meaning: "사전 협의", pos: "명사", years: ["명사"], example: "打ち合わせをする。", exampleReading: "うちあわせをする。", exampleMeaning: "사전 협의를 한다." },
-  { word: "売り切れ", reading: "うりきれ", meaning: "매진", pos: "명사", years: ["명사"], example: "売り切れになる。", exampleReading: "うりきれになる。", exampleMeaning: "매진된다." },
-  { word: "公社員", reading: "こうしゃいん", meaning: "공사 직원", pos: "명사", years: ["명사"], example: "公社員として働く。", exampleReading: "こうしゃいんとしてはたらく。", exampleMeaning: "공사 직원으로 일한다." },
-  { word: "貸し出し", reading: "かしだし", meaning: "대출", pos: "명사", years: ["명사"], example: "本の貸し出しをする。", exampleReading: "ほんのかしだしをする。", exampleMeaning: "책 대출을 한다." },
-  { word: "片付け", reading: "かたづけ", meaning: "정리", pos: "명사", years: ["명사"], example: "部屋の片付けをする。", exampleReading: "へやのかたづけをする。", exampleMeaning: "방 정리를 한다." },
-  { word: "かっこう", reading: "かっこう", meaning: "차림새, 모양", pos: "명사", years: ["명사"], example: "動きやすいかっこうだ。", exampleReading: "うごきやすいかっこうだ。", exampleMeaning: "움직이기 편한 차림새다." },
-  { word: "から", reading: "から", meaning: "껍질", pos: "명사", years: ["명사"], example: "卵のからをむく。", exampleReading: "たまごのからをむく。", exampleMeaning: "달걀 껍질을 깐다." },
-  { word: "考え", reading: "かんがえ", meaning: "생각", pos: "명사", years: ["명사"], example: "自分の考えを言う。", exampleReading: "じぶんのかんがえをいう。", exampleMeaning: "자신의 생각을 말한다." },
-  { word: "記入", reading: "きにゅう", meaning: "기입", pos: "명사·동사", years: ["명사"], example: "名前を記入する。", exampleReading: "なまえをきにゅうする。", exampleMeaning: "이름을 기입한다." },
-  { word: "きっかけ", reading: "きっかけ", meaning: "계기", pos: "명사", years: ["명사"], example: "それがきっかけだった。", exampleReading: "それがきっかけだった。", exampleMeaning: "그것이 계기였다." },
-  { word: "支払い", reading: "しはらい", meaning: "지불", pos: "명사", years: ["명사"], example: "支払いを済ませる。", exampleReading: "しはらいをすませる。", exampleMeaning: "지불을 마친다." },
-  { word: "しめきり", reading: "しめきり", meaning: "마감", pos: "명사", years: ["명사"], example: "しめきりに間に合う。", exampleReading: "しめきりにまにあう。", exampleMeaning: "마감에 맞춘다." },
-  { word: "じゃま", reading: "じゃま", meaning: "방해", pos: "명사·형용사·동사", years: ["명사"], example: "じゃまにならないようにする。", exampleReading: "じゃまにならないようにする。", exampleMeaning: "방해가 되지 않도록 한다." },
-  { word: "習慣", reading: "しゅうかん", meaning: "습관", pos: "명사", years: ["명사"], example: "いい習慣をつける。", exampleReading: "いいしゅうかんをつける。", exampleMeaning: "좋은 습관을 들인다." },
-  { word: "ご覧", reading: "ごらん", meaning: "보심", pos: "명사", years: ["명사"], example: "こちらをご覧ください。", exampleReading: "こちらをごらんください。", exampleMeaning: "이쪽을 보세요." },
-  { word: "使い道", reading: "つかいみち", meaning: "용도, 쓸모", pos: "명사", years: ["명사"], example: "使い道を考える。", exampleReading: "つかいみちをかんがえる。", exampleMeaning: "용도를 생각한다." },
-  { word: "保存", reading: "ほぞん", meaning: "보존", pos: "명사·동사", years: ["명사"], example: "データを保存する。", exampleReading: "でーたをほぞんする。", exampleMeaning: "데이터를 저장한다." },
-  { word: "単位", reading: "たんい", meaning: "단위, 학점", pos: "명사", years: ["명사"], example: "単位を取る。", exampleReading: "たんいをとる。", exampleMeaning: "학점을 딴다." },
-  { word: "ためいき", reading: "ためいき", meaning: "한숨", pos: "명사·동사", years: ["명사"], example: "ためいきが出る。", exampleReading: "ためいきがでる。", exampleMeaning: "한숨이 나온다." },
-  { word: "分解", reading: "ぶんかい", meaning: "분해", pos: "명사·동사", years: ["명사"], example: "機械を分解する。", exampleReading: "きかいをぶんかいする。", exampleMeaning: "기계를 분해한다." },
-  { word: "それぞれ", reading: "それぞれ", meaning: "각각", pos: "명사·부사", years: ["명사"], example: "それぞれの役割がある。", exampleReading: "それぞれのやくわりがある。", exampleMeaning: "각각 역할이 있다." },
-  { word: "商品", reading: "しょうひん", meaning: "상품", pos: "명사", years: ["명사"], example: "新商品を調べる。", exampleReading: "しんしょうひんをしらべる。", exampleMeaning: "신상품을 조사한다." },
-  { word: "ふた", reading: "ふた", meaning: "뚜껑", pos: "명사", years: ["명사"], example: "鍋のふたをする。", exampleReading: "なべのふたをする。", exampleMeaning: "냄비 뚜껑을 덮는다." },
-  { word: "美容", reading: "びよう", meaning: "미용", pos: "명사", years: ["명사"], example: "美容に関心がある。", exampleReading: "びようかんしんがある。", exampleMeaning: "미용에 관심이 있다." },
-  { word: "ひも", reading: "ひも", meaning: "끈", pos: "명사", years: ["명사"], example: "ひもで縛る。", exampleReading: "ひもでしばる。", exampleMeaning: "끈으로 묶는다." },
-  { word: "人生", reading: "じんせい", meaning: "인생", pos: "명사", years: ["명사"], example: "人生の経験になる。", exampleReading: "じんせいのけいけんになる。", exampleMeaning: "인생의 경험이 된다." },
-  { word: "生徒", reading: "せいと", meaning: "학생", pos: "명사", years: ["명사"], example: "生徒が増える。", exampleReading: "せいとがふえる。", exampleMeaning: "학생이 늘어난다." },
-  { word: "反対", reading: "はんたい", meaning: "반대", pos: "명사·형용사·동사", years: ["명사"], example: "意見に反対する。", exampleReading: "いけんにはんたいする。", exampleMeaning: "의견에 반대한다." },
-  { word: "話し合い", reading: "はなしあい", meaning: "논의, 대화", pos: "명사", years: ["명사"], example: "話し合いを持つ。", exampleReading: "はなしあいをもつ。", exampleMeaning: "논의를 가진다." },
-  { word: "発行", reading: "はっこう", meaning: "발행", pos: "명사·동사", years: ["명사"], example: "雑誌を発行する。", exampleReading: "ざっしをはっこうする。", exampleMeaning: "잡지를 발행한다." },
-  { word: "ながめ", reading: "ながめ", meaning: "전망, 경치", pos: "명사", years: ["명사"], example: "窓からのながめがいい。", exampleReading: "まどからのながめがいい。", exampleMeaning: "창밖 전망이 좋다." },
-  { word: "われわれ", reading: "われわれ", meaning: "우리들", pos: "명사", years: ["명사"], example: "われわれの課題だ。", exampleReading: "われわれのかだいだ。", exampleMeaning: "우리들의 과제다." },
-
-  // [예상어휘: 동사]
-  { word: "愛する", reading: "あいする", meaning: "사랑하다", pos: "동사", years: ["동사"], example: "家族を愛する。", exampleReading: "かぞくをあいする。", exampleMeaning: "가족을 사랑한다." },
-  { word: "上がる", reading: "あがる", meaning: "오르다", pos: "동사", years: ["동사"], example: "気温が上がる。", exampleReading: "きおんがあがる。", exampleMeaning: "기온이 오른다." },
-  { word: "空ける", reading: "あける", meaning: "비우다", pos: "동사", years: ["동사"], example: "予定を空ける。", exampleReading: "よていをあける。", exampleMeaning: "일정을 비운다." },
-  { word: "あてはまる", reading: "あてはまる", meaning: "해당하다", pos: "동사", years: ["동사"], example: "条件にあてはまる。", exampleReading: "じょうけんにあてはまる。", exampleMeaning: "조건에 해당한다." },
-  { word: "あびる", reading: "あびる", meaning: "끼얹다, 쐬다", pos: "동사", years: ["동사"], example: "光をあびる。", exampleReading: "ひかりをあびる。", exampleMeaning: "빛을 쬔다." },
-  { word: "いじめる", reading: "いじめる", meaning: "괴롭히다", pos: "동사", years: ["동사"], example: "人をいじめない。", exampleReading: "ひとをいじめない。", exampleMeaning: "사람을 괴롭히지 않는다." },
-  { word: "受かる", reading: "うかる", meaning: "합격하다", pos: "동사", years: ["동사"], example: "試験に受かる。", exampleReading: "しけんにうかる。", exampleMeaning: "시험에 합격한다." },
-  { word: "受ける", reading: "うける", meaning: "받다, 치르다", pos: "동사", years: ["동사"], example: "テストを受ける。", exampleReading: "てすとをうける。", exampleMeaning: "시험을 치른다." },
-  { word: "打ち合わせる", reading: "うちあわせる", meaning: "사전 협의하다", pos: "동사", years: ["동사"], example: "時間と場所を打ち合わせる。", exampleReading: "じかんとばしょをうちあわせる。", exampleMeaning: "시간과 장소를 상의한다." },
-  { word: "うらやむ", reading: "うらやむ", meaning: "부러워하다", pos: "동사", years: ["동사"], example: "成功をうらやむ。", exampleReading: "せいこうをうらやむ。", exampleMeaning: "성공을 부러워한다." },
-  { word: "売れる", reading: "うれる", meaning: "팔리다", pos: "동사", years: ["동사"], example: "商品が売れる。", exampleReading: "しょうひんがうれる。", exampleMeaning: "상품이 팔린다." },
-  { word: "下ろす", reading: "おろす", meaning: "내리다, 찾다", pos: "동사", years: ["동사"], example: "お金を下ろす。", exampleReading: "おかねをおろす。", exampleMeaning: "돈을 찾는다." },
-  { word: "かける", reading: "かける", meaning: "걸다, 쓰다", pos: "동사", years: ["동사"], example: "時間をかける。", exampleReading: "じかんをかける。", exampleMeaning: "시간을 들인다." },
-  { word: "欠ける", reading: "かける", meaning: "이빠지다, 모자라다", pos: "동사", years: ["동사"], example: "一部が欠ける。", exampleReading: "いちぶがかける。", exampleMeaning: "일부가 빠진다." },
-  { word: "攻める", reading: "せめる", meaning: "공격하다", pos: "동사", years: ["동사"], example: "相手を攻める。", exampleReading: "あいてをせめる。", exampleMeaning: "상대를 공격한다." },
-  { word: "対する", reading: "たいする", meaning: "~에 대한", pos: "동사", years: ["동사"], example: "質問に対する答えだ。", exampleReading: "しつもんにたいするこたえだ。", exampleMeaning: "질문에 대한 답이다." },
-  { word: "付く", reading: "つく", meaning: "붙다, 생기다", pos: "동사", years: ["동사"], example: "力が付く。", exampleReading: "ちからがつく。", exampleMeaning: "힘이 붙는다." },
-  { word: "つながる", reading: "つながる", meaning: "연결되다", pos: "동사", years: ["동사"], example: "道がつながる。", exampleReading: "みちがつながる。", exampleMeaning: "길이 연결된다." },
-  { word: "つなぐ", reading: "つなぐ", meaning: "잇다", pos: "동사", years: ["동사"], example: "手をつなぐ。", exampleReading: "てをつなぐ。", exampleMeaning: "손을 잡는다." },
-  { word: "つなげる", reading: "つなげる", meaning: "연결하다", pos: "동사", years: ["동사"], example: "画面につなげる。", exampleReading: "がめんにつなげる。", exampleMeaning: "화면에 연결한다." },
-  { word: "できる", reading: "できる", meaning: "할 수 있다, 생기다", pos: "동사", years: ["동사"], example: "新しい店ができる。", exampleReading: "あたらしいみせができる。", exampleMeaning: "새 가게가 생긴다." },
-  { word: "取り入れる", reading: "とりいれる", meaning: "도입하다", pos: "동사", years: ["동사"], example: "工夫を取り入れる。", exampleReading: "くふうをとりいれる。", exampleMeaning: "궁리를 도입한다." },
-  { word: "乗せる", reading: "のせる", meaning: "태우다, 싣다", pos: "동사", years: ["동사"], example: "車に乗せる。", exampleReading: "くるまにのせる。", exampleMeaning: "차에 태운다." },
-  { word: "支配する", reading: "しはいする", meaning: "지배하다", pos: "동사", years: ["동사"], example: "感情に支配されない。", exampleReading: "かんじょうにしはいされない。", exampleMeaning: "감정에 지배되지 않는다." },
-  { word: "しゃべる", reading: "しゃべる", meaning: "말하다", pos: "동사", years: ["동사"], example: "楽しくしゃべる。", exampleReading: "たのしくしゃべる。", exampleMeaning: "즐겁게 말한다." },
-  { word: "優れる", reading: "すぐれる", meaning: "뛰어나다", pos: "동사", years: ["동사"], example: "能力に優れる。", exampleReading: "のうりょくにすぐれる。", exampleMeaning: "능력에 뛰어나다." },
-  { word: "引っ張る", reading: "ひっぱる", meaning: "당기다, 끌다", pos: "동사", years: ["동사"], example: "手前に引っ張る。", exampleReading: "てまえにひっぱる。", exampleMeaning: "앞으로 당긴다." },
-  { word: "ふやす", reading: "ふやす", meaning: "늘리다", pos: "동사", years: ["동사"], example: "数をふやす。", exampleReading: "かずをふやす。", exampleMeaning: "수를 늘린다." },
-  { word: "ぶつかる", reading: "ぶつかる", meaning: "부딪치다", pos: "동사", years: ["동사"], example: "壁にぶつかる。", exampleReading: "かべにぶつかる。", exampleMeaning: "벽에 부딪친다." },
-  { word: "触れる", reading: "ふれる", meaning: "만지다, 접하다", pos: "동사", years: ["동사"], example: "作品に触れる。", exampleReading: "さくひんにふれる。", exampleMeaning: "작품에 접한다." },
-  { word: "わさび", reading: "わさび", meaning: "고추냉이", pos: "명사", years: ["동사"], example: "わさびをつける。", exampleReading: "わさびをつける。", exampleMeaning: "고추냉이를 바른다." },
-
-  // [예상어휘: い형용사 · な형용사]
-  { word: "ありがたい", reading: "ありがたい", meaning: "고맙다", pos: "형용사", years: ["형용사"], example: "助けてくれてありがたい。", exampleReading: "たすけてくれてありがたい。", exampleMeaning: "도와줘서 고맙다." },
-  { word: "おとなしい", reading: "おとなしい", meaning: "얌전하다", pos: "형용사", years: ["형용사"], example: "おとなしい犬だ。", exampleReading: "おとなしいいぬだ。", exampleMeaning: "얌전한 개다." },
-  { word: "かわいらしい", reading: "かわいらしい", meaning: "귀엽다", pos: "형용사", years: ["형용사"], example: "かわいらしい声だ。", exampleReading: "かわいらしいこえだ。", exampleMeaning: "귀여운 목소리다." },
-  { word: "こい", reading: "こい", meaning: "진하다", pos: "형용사", years: ["형용사"], example: "味がこい。", exampleReading: "あじがこい。", exampleMeaning: "맛이 진하다." },
-  { word: "するどい", reading: "するどい", meaning: "날카롭다", pos: "형용사", years: ["형용사"], example: "するどい質問だ。", exampleReading: "するどいしつもんだ。", exampleMeaning: "날카로운 질문이다." },
-  { word: "とんでもない", reading: "とんでもない", meaning: "말도 안 되다, 천만에", pos: "형용사", years: ["형용사"], example: "とんでもないことです。", exampleReading: "とんでもないことです。", exampleMeaning: "천만의 말씀입니다." },
-  { word: "ややこしい", reading: "ややこしい", meaning: "복잡하다, 까다롭다", pos: "형용사", years: ["형용사"], example: "仕組みがややこしい。", exampleReading: "しくみがややこしい。", exampleMeaning: "구조가 복잡하다." },
-  { word: "あきらかだ", reading: "あきらかだ", meaning: "분명하다", pos: "형용사", years: ["형용사"], example: "理由があきらかだ。", exampleReading: "りゆうがあきらかだ。", exampleMeaning: "이유가 분명하다." },
-  { word: "あたりまえだ", reading: "あたりまえだ", meaning: "당연하다", pos: "형용사", years: ["형용사"], example: "守るのはあたりまえだ。", exampleReading: "まもるのはあたりまえだ。", exampleMeaning: "지키는 것은 당연하다." },
-  { word: "幸せだ", reading: "しあわせだ", meaning: "행복하다", pos: "형용사", years: ["형용사"], example: "家族といて幸せだ。", exampleReading: "かぞくといてしあわせだ。", exampleMeaning: "가족과 함께 있어 행복하다." },
-  { word: "なめらかだ", reading: "なめらかだ", meaning: "매끄럽다", pos: "형용사", years: ["형용사"], example: "動きがなめらかだ。", exampleReading: "うごきがなめらかだ。", exampleMeaning: "움직임이 매끄럽다." },
-  { word: "まれだ", reading: "まれだ", meaning: "드물다", pos: "형용사", years: ["형용사"], example: "とてもまれなケースだ。", exampleReading: "とてもまれなけーすだ。", exampleMeaning: "매우 드문 경우다." },
-
-  // [예상어휘: 부사]
-  { word: "いよいよ", reading: "いよいよ", meaning: "드디어, 마침내", pos: "부사", years: ["부사"], example: "いよいよ始まる。", exampleReading: "いよいよはじまる。", exampleMeaning: "드디어 시작한다." },
-  { word: "さっさと", reading: "さっさと", meaning: "어서, 재빨리", pos: "부사", years: ["부사"], example: "さっさと終わらせる。", exampleReading: "さっさとおわらせる。", exampleMeaning: "어서 끝낸다." },
-  { word: "更に", reading: "さらに", meaning: "더욱", pos: "부사", years: ["부사"], example: "更に努力する。", exampleReading: "さらにどりょくする。", exampleMeaning: "더욱 노력한다." },
-  { word: "いつ切り", reading: "いつきり", meaning: "그 뒤로 영영", pos: "부사", years: ["부사"], example: "それっきり会っていない。", exampleReading: "それっきりあっていない。", exampleMeaning: "그 뒤로 만나지 못했다." },
-  { word: "かなり", reading: "かなり", meaning: "상당히", pos: "부사·형용사", years: ["부사"], example: "かなり人が多い。", exampleReading: "かなりひとがおおい。", exampleMeaning: "상당히 사람이 많다." },
-  { word: "ぐらぐら", reading: "ぐらぐら", meaning: "흔들흔들", pos: "부사", years: ["부사"], example: "テーブルがぐらぐらする。", exampleReading: "てーぶるがぐらぐらする。", exampleMeaning: "테이블이 흔들흔들한다." },
-  { word: "ざっと", reading: "ざっと", meaning: "대충, 대략", pos: "부사", years: ["부사"], example: "ざっと目を通す。", exampleReading: "ざっとめをとおす。", exampleMeaning: "대충 훑어본다." },
-  { word: "いちいち", reading: "いちいち", meaning: "일일이", pos: "부사", years: ["부사"], example: "いちいち気にしない。", exampleReading: "いちいちきにしない。", exampleMeaning: "일일이 신경 쓰지 않는다." },
-  { word: "からから", reading: "からから", meaning: "바싹 마름", pos: "부사", years: ["부사"], example: "喉がからからだ。", exampleReading: "のどがからからだ。", exampleMeaning: "목이 바싹 마르다." },
-  { word: "けっこう", reading: "けっこう", meaning: "꽤, 괜찮음", pos: "부사·형용사", years: ["부사"], example: "けっこう時間がかかる。", exampleReading: "けっこうじかんがかかる。", exampleMeaning: "꽤 시간이 걸린다." },
-  { word: "さっぱり", reading: "さっぱり", meaning: "개운함, 전혀", pos: "부사", years: ["부사"], example: "気分がさっぱりした。", exampleReading: "きぶんがさっぱりした。", exampleMeaning: "기분이 개운해졌다." },
-  { word: "自然に", reading: "しぜんに", meaning: "자연스럽게", pos: "부사", years: ["부사"], example: "自然に笑顔が出る。", exampleReading: "しぜんにえがおがでる。", exampleMeaning: "자연스럽게 미소가 나온다." },
-  { word: "じっと", reading: "じっと", meaning: "가만히", pos: "부사", years: ["부사"], example: "じっと見つめる。", exampleReading: "じっとみつめる。", exampleMeaning: "가만히 바라본다." },
-  { word: "少しも", reading: "すこしも", meaning: "조금도", pos: "부사", years: ["부사"], example: "少しも怖くない。", exampleReading: "すこしもこわくない。", exampleMeaning: "조금도 무섭지 않다." },
-  { word: "せっかく", reading: "せっかく", meaning: "모처럼", pos: "부사", years: ["부사"], example: "せっかく来たから楽しむ。", exampleReading: "せっかくきたからたのしむ。", exampleMeaning: "모처럼 왔으니 즐긴다." },
-  { word: "ぞくぞく", reading: "ぞくぞく", meaning: "연달아, 으스스", pos: "부사", years: ["부사"], example: "人がぞくぞく集まる。", exampleReading: "ひとがぞくぞくあつまる。", exampleMeaning: "사람들이 속속 모인다." },
-  { word: "だいぶん", reading: "だいぶん", meaning: "대단히, 꽤", pos: "부사·형용사", years: ["부사"], example: "だいぶん良くなった。", exampleReading: "だいぶんよくなった。", exampleMeaning: "꽤 나아졌다." },
-  { word: "たいてい", reading: "たいてい", meaning: "대개", pos: "부사·명사", years: ["부사"], example: "たいてい家にいる。", exampleReading: "たいていいえにいる。", exampleMeaning: "대개 집에 있다." },
-  { word: "たちまち", reading: "たちまち", meaning: "금세", pos: "부사", years: ["부사"], example: "たちまち広まった。", exampleReading: "たちまちひろまった。", exampleMeaning: "금세 퍼졌다." },
-  { word: "ただちに", reading: "ただちに", meaning: "즉시", pos: "부사", years: ["부사"], example: "ただちに連絡する。", exampleReading: "ただちにれんらくする。", exampleMeaning: "즉시 연락한다." },
-  { word: "たった", reading: "たった", meaning: "단, 겨우", pos: "부사", years: ["부사"], example: "たった五分で着く。", exampleReading: "たったごふんでつく。", exampleMeaning: "단 5분이면 도착한다." },
-  { word: "ちゃんと", reading: "ちゃんと", meaning: "제대로", pos: "부사", years: ["부사"], example: "ちゃんと確認する。", exampleReading: "ちゃんとにかくにんする。", exampleMeaning: "제대로 확인한다." },
-  { word: "つまり", reading: "つまり", meaning: "즉", pos: "부사·접속", years: ["부사"], example: "つまりそういうことだ。", exampleReading: "つまりそういうことだ。", exampleMeaning: "즉 그런 말이다." },
-  { word: "どうしても", reading: "どうしても", meaning: "아무리 해도, 꼭", pos: ["부사"], example: "どうしても行きたい。", exampleReading: "どうしてもいきたい。", exampleMeaning: "꼭 가고 싶다." },
-  { word: "とにかく", reading: "とにかく", meaning: "어쨌든", pos: "부사·접속", years: ["부사"], example: "とにかく試してみよう。", exampleReading: "とにかくためしてみよう。", exampleMeaning: "어쨌든 시도해 보자." },
-  { word: "どんどん", reading: "どんどん", meaning: "계속, 쑥쑥", pos: "부사", years: ["부사"], example: "どんどん上手になる。", exampleReading: "どんどんじょうずになる。", exampleMeaning: "쑥쑥 늘어난다." },
-  { word: "のんびり", reading: "のんびり", meaning: "느긋하게", pos: "부사", years: ["부사"], example: "のんびり過ごす。", exampleReading: "のんびりすごす。", exampleMeaning: "느긋하게 보낸다." },
-  { word: "はっきり", reading: "はっきり", meaning: "분명히", pos: "부사", years: ["부사"], example: "はっきり聞こえる。", exampleReading: "はっきりきこえる。", exampleMeaning: "분명히 들린다." },
-  { word: "まあまあ", reading: "まあまあ", meaning: "그럭저럭", pos: "부사", years: ["부사"], example: "まあまあの出来だ。", exampleReading: "まあまあのできだ。", exampleMeaning: "그럭저럭한 결과다." },
-  { word: "ますます", reading: "ますます", meaning: "점점 더", pos: "부사", years: ["부사"], example: "ますます面白くなる。", exampleReading: "ますますおもしろくなる。", exampleMeaning: "점점 더 재미있어진다." },
-  { word: "まるで", reading: "まるで", meaning: "마치 ~처럼", pos: "부사", years: ["부사"], example: "まるで夢のようだ。", exampleReading: "まるでゆめのようだ。", exampleMeaning: "마치 꿈같다." },
-  { word: "もちろん", reading: "もちろん", meaning: "물론", pos: "부사", years: ["부사"], example: "もちろん参加する。", exampleReading: "もちろんさんかする。", exampleMeaning: "물론 참가한다." },
-  { word: "わくわく", reading: "わくわく", meaning: "설렘", pos: "부사", years: ["부사"], example: "旅行の前はわくわくする。", exampleReading: "りょこうのまえはわくわくする。", exampleMeaning: "여행 전엔 설렌다." },
-  { word: "わずか", reading: "わずか", meaning: "약간, 조금", pos: "부사·형용사", years: ["부사"], example: "わずかな差だ。", exampleReading: "わずかなさだ。", exampleMeaning: "약간의 차이다." },
-
-  // [예상어휘: 외래어]
-  { word: "アナログ", reading: "あなろぐ", meaning: "아날로그", pos: "명사·외래어", years: ["외래어"], example: "アナログ時計を見る。", exampleReading: "あなろぐどけいをみる。", exampleMeaning: "아날로그 시계를 본다." },
-  { word: "アニメ", reading: "あにめ", meaning: "애니메이션", pos: "명사·외래어", years: ["외래어"], example: "アニメが好きだ。", exampleReading: "あにめがすきだ。", exampleMeaning: "애니메이션을 좋아한다." },
-  { word: "アルバム", reading: "あるばむ", meaning: "앨범", pos: "명사·외래어", years: ["외래어"], example: "アルバムを開く。", exampleReading: "あるばむをひらく。", exampleMeaning: "앨범을 펼친다." },
-  { word: "アンケート", reading: "あんけーと", meaning: "설문조사", pos: "명사·외래어", years: ["외래어"], example: "アンケートに答える。", exampleReading: "あんけーとにこたえる。", exampleMeaning: "설문조사에 답한다." },
-  { word: "インク", reading: "いんく", meaning: "잉크", pos: "명사·외래어", years: ["외래어"], example: "ペンのインクが切れる。", exampleReading: "ぺんのいんくがきれる。", exampleMeaning: "펜 잉크가 떨어진다." },
-  { word: "インターネット", reading: "いんたーねっと", meaning: "인터넷", pos: "명사·외래어", years: ["외래어"], example: "インターネットで調べる。", exampleReading: "いんたーねっとでしらべる。", exampleMeaning: "인터넷으로 조사한다." },
-  { word: "エリート", reading: "えりーと", meaning: "엘리트", pos: "명사·외래어", years: ["외래어"], example: "エリートコースを進む。", exampleReading: "えりーとこーすをすすむ。", exampleMeaning: "엘리트 코스를 밟는다." },
-  { word: "エンジン", reading: "えんじん", meaning: "엔진", pos: "명사·외래어", years: ["외래어"], example: "エンジンをかける。", exampleReading: "えんじんをかける。", exampleMeaning: "엔진을 건다." },
-  { word: "オープン", reading: "おーぷん", meaning: "오픈, 개장", pos: "명사·동사·외래어", years: ["외래어"], example: "店がオープンする。", exampleReading: "みせがおーぷんする。", exampleMeaning: "가게가 오픈한다." },
-  { word: "オリンピック", reading: "おりんぴっく", meaning: "올림픽", pos: "명사·외래어", years: ["외래어"], example: "オリンピックを見る。", exampleReading: "おりんぴっくをみる。", exampleMeaning: "올림픽을 본다." },
-  { word: "カー", reading: "かー", meaning: "카, 자동차", pos: "명사·외래어", years: ["외래어"], example: "スポーツカーに乗る。", exampleReading: "すぽーつかーにのる。", exampleMeaning: "스포츠카를 탄다." },
-  { word: "カード", reading: "かーど", meaning: "카드", pos: "명사·외래어", years: ["외래어"], example: "カードで払う。", exampleReading: "かーどではらう。", exampleMeaning: "카드로 지불한다." },
-  { word: "カセット", reading: "かせっと", meaning: "카세트", pos: "명사·외래어", years: ["외래어"], example: "カセットテープを聞く。", exampleReading: "かせっとてーぷをきく。", exampleMeaning: "카세트테이프를 듣는다." },
-  { word: "カット", reading: "かっと", meaning: "컷, 자르기", pos: "명사·동사·외래어", years: ["외래어"], example: "髪をカットする。", exampleReading: "かみをかっとする。", exampleMeaning: "머리를 자른다." },
-  { word: "キーワード", reading: "きーわーど", meaning: "키워드", pos: "명사·외래어", years: ["외래어"], example: "キーワードを探す。", exampleReading: "きーわーどをさがす。", exampleMeaning: "키워드를 찾는다." },
-  { word: "クーラー", reading: "くーらー", meaning: "에어컨, 쿨러", pos: "명사·외래어", years: ["외래어"], example: "クーラーをつける。", exampleReading: "くーらーをつける。", exampleMeaning: "에어컨을 켠다." },
-  { word: "クラスメート", reading: "くらすめーと", meaning: "반 친구", pos: "명사·외래어", years: ["외래어"], example: "クラスメートと話す。", exampleReading: "くらすめーととはなす。", exampleMeaning: "반 친구와 이야기한다." },
-  { word: "グラフ", reading: "ぐらふ", meaning: "그래프", pos: "명사·외래어", years: ["외래어"], example: "グラフにまとめる。", exampleReading: "ぐらふにまとめる。", exampleMeaning: "그래프로 정리한다." },
-  { word: "クリーム", reading: "くりーむ", meaning: "크림", pos: "명사·외래어", years: ["외래어"], example: "クリームを塗る。", exampleReading: "くりーむをぬる。", exampleMeaning: "크림을 바른다." },
-  { word: "ケース", reading: "けーす", meaning: "케이스, 경우", pos: "명사·외래어", years: ["외래어"], example: "ケースによって違う。", exampleReading: "けーすによってちがう。", exampleMeaning: "경우에 따라 다르다." },
-  { word: "コーナー", reading: "こーなー", meaning: "코너", pos: "명사·외래어", years: ["외래어"], example: "新刊コーナーを見る。", exampleReading: "しんかんこーなーをみる。", exampleMeaning: "신간 코너를 본다." },
-  { word: "コピー", reading: "こぴー", meaning: "복사, 카피", pos: "명사·동사·외래어", years: ["외래어"], example: "書類をコピーする。", exampleReading: "しょるいをこぴーする。", exampleMeaning: "서류를 복사한다." },
-  { word: "コミュニケーション", reading: "こみゅにけーしょん", meaning: "의사소통", pos: "명사·외래어", years: ["외래어"], example: "コミュニケーションを取る。", exampleReading: "こみゅにけーしょんをとる。", exampleMeaning: "의사소통을 한다." },
-  { word: "コンクール", reading: "こんくーる", meaning: "콩쿠르, 경연", pos: "명사·외래어", years: ["외래어"], example: "コンクールに出る。", exampleReading: "こんくーるにでる。", exampleMeaning: "콩쿠르에 나간다." },
-  { word: "コンビニ", reading: "こんびに", meaning: "편의점", pos: "명사·외래어", years: ["외래어"], example: "コンビニに寄る。", exampleReading: "こんびにによる。", exampleMeaning: "편의점에 들른다." },
-  { word: "サイト", reading: "さいと", meaning: "사이트", pos: "명사·외래어", years: ["외래어"], example: "公式サイトを見る。", exampleReading: "こうしきさいとをみる。", exampleMeaning: "공식 사이트를 본다." },
-  { word: "サラリーマン", reading: "さらりーまん", meaning: "샐러리맨, 회사원", pos: "명사·외래어", years: ["외래어"], example: "サラリーマンが多い。", exampleReading: "さらりーまんがおおい。", exampleMeaning: "회사원이 많다." },
-  { word: "シーズン", reading: "しーずん", meaning: "시즌", pos: "명사·외래어", years: ["외래어"], example: "旅行のシーズンだ。", exampleReading: "りょこうのしーずんだ。", exampleMeaning: "여행 시즌이다." },
-  { word: "ショーウィンドー", reading: "しょーうぃんどー", meaning: "쇼윈도", pos: "명사·외래어", years: ["외래어"], example: "ショーウィンドーを見る。", exampleReading: "しょーうぃんどーをみる。", exampleMeaning: "쇼윈도를 본다." },
-  { word: "スープ", reading: "すーぷ", meaning: "수프", pos: "명사·외래어", years: ["외래어"], example: "温かいスープを飲む。", exampleReading: "あたたかいすーぷをのむ。", exampleMeaning: "따뜻한 수프를 마신다." },
-  { word: "スキー", reading: "すきー", meaning: "스키", pos: "명사·동사·외래어", years: ["외래어"], example: "冬にスキーに行く。", exampleReading: "ふゆにすきーにいく。", exampleMeaning: "겨울에 스키 타러 간다." },
-  { word: "スケート", reading: "すけーと", meaning: "스케이트", pos: "명사·동사·외래어", years: ["외래어"], example: "スケートをする。", exampleReading: "すけーとをする。", exampleMeaning: "스케이트를 탄다." },
-  { word: "スタート", reading: "すたーと", meaning: "출발, 스타트", pos: "명사·동사·외래어", years: ["외래어"], example: "同時にスタートする。", exampleReading: "どうじにすたーとする。", exampleMeaning: "동시에 출발한다." },
-  { word: "ストレス", reading: "すとれす", meaning: "스트레스", pos: "명사·외래어", years: ["외래어"], example: "ストレスを減らす。", exampleReading: "すとれすをへらす。", exampleMeaning: "스트레스를 줄인다." },
-  { word: "スパゲッティ", reading: "すぱげってぃ", meaning: "스파게티", pos: "명사·외래어", years: ["외래어"], example: "スパゲッティを作る。", exampleReading: "すぱげってぃをつくる。", exampleMeaning: "스파게티를 만든다." },
-  { word: "スピーチ", reading: "すぴーち", meaning: "스피치", pos: "명사·외래어", years: ["외래어"], example: "スピーチをする。", exampleReading: "すぴーちをする。", exampleMeaning: "스피치를 한다." },
-  { word: "セール", reading: "せーる", meaning: "세일", pos: "명사·동사·외래어", years: ["외래어"], example: "セールの期間中だ。", exampleReading: "せーるのかんちゅうだ。", exampleMeaning: "세일 기간 중이다." },
-  { word: "セミナー", reading: "せみなー", meaning: "세미나", pos: "명사·외래어", years: ["외래어"], example: "セミナーに参加する。", exampleReading: "せみなーにさんかする。", exampleMeaning: "세미나에 참가한다." },
-  { word: "ターミナル", reading: "たーみなる", meaning: "터미널", pos: "명사·외래어", years: ["외래어"], example: "バスターミナルへ行く。", exampleReading: "ばすたーみなるへいく。", exampleMeaning: "버스 터미널에 간다." },
-  { word: "ダイエット", reading: "だいえっと", meaning: "다이어트", pos: "명사·동사·외래어", years: ["외래어"], example: "ダイエットを始める。", exampleReading: "だいえっとをはじめる。", exampleMeaning: "다이어트를 시작한다." },
-  { word: "タイトル", reading: "たいとる", meaning: "제목, 타이틀", pos: "명사·외래어", years: ["외래어"], example: "本のタイトルを決める。", exampleReading: "ほんのたいとるをきめる。", exampleMeaning: "책 제목을 정한다." },
-  { word: "タイヤ", reading: "たいや", meaning: "타이어", pos: "명사·외래어", years: ["외래어"], example: "タイヤを交換する。", exampleReading: "たいやをこうかんする。", exampleMeaning: "타이어를 교환한다." },
-  { word: "ダンス", reading: "だんす", meaning: "댄스, 춤", pos: "명사·동사·외래어", years: ["외래어"], example: "ダンスを練習する。", exampleReading: "だんすをれんしゅうする。", exampleMeaning: "춤을 연습한다." },
-  { word: "チェックアウト", reading: "ちぇっくあうと", meaning: "체크아웃", pos: "명사·동사·외래어", years: ["외래어"], example: "朝十時にチェックアウトする。", exampleReading: "あさじゅうじにちぇっくあうとする。", exampleMeaning: "아침 10시에 체크아웃한다." },
-  { word: "チェックイン", reading: "ちぇっくいん", meaning: "체크인", pos: "명사·동사·외래어", years: ["외래어"], example: "ホテルにチェックインする。", exampleReading: "ほてるにちぇっくいんする。", exampleMeaning: "호텔에 체크인한다." },
-  { word: "チェックポイント", reading: "ちぇっくぽいんと", meaning: "체크포인트", pos: "명사·외래어", years: ["외래어"], example: "チェックポイントを通る。", exampleReading: "ちぇっくぽいんとをとおる。", exampleMeaning: "체크포인트를 지난다." },
-  { word: "チェンジ", reading: "ちぇんじ", meaning: "교체, 변경", pos: "명사·동사·외래어", years: ["외래어"], example: "順番をチェンジする。", exampleReading: "じゅんばんをちぇんじする。", exampleMeaning: "순서를 바꾼다." },
-  { word: "チップ", reading: "ちっぷ", meaning: "팁, 칩", pos: "명사·외래어", years: ["외래어"], example: "チップを渡す。", exampleReading: "ちっぷをわたす。", exampleMeaning: "팁을 건넨다." },
-  { word: "チーム", reading: "ちーむ", meaning: "팀", pos: "명사·외래어", years: ["외래어"], example: "チームで協力する。", exampleReading: "ちーむできょうりょくする。", exampleMeaning: "팀으로 협력한다." },
-  { word: "テイクアウト", reading: "ていくあうと", meaning: "테이크아웃, 포장", pos: "명사·동사·외래어", years: ["외래어"], example: "コーヒーをテイクアウトする。", exampleReading: "こーひーをていくあうとする。", exampleMeaning: "커피를 포장한다." },
-  { word: "デート", reading: "でーと", meaning: "데이트", pos: "명사·동사·외래어", years: ["외래어"], example: "週末にデートする。", exampleReading: "しゅうまつにでーとする。", exampleMeaning: "주말에 데이트한다." },
-  { word: "デジタル", reading: "でじたる", meaning: "디지털", pos: "명사·외래어", years: ["외래어"], example: "デジタル機器を使う。", exampleReading: "でじたるききをつかう。", exampleMeaning: "디지털 기기를 사용한다." },
-  { word: "デジタルカメラ", reading: "でじたるかめら", meaning: "디지털 카메라", pos: "명사·외래어", years: ["외래어"], example: "デジタルカメラで撮る。", exampleReading: "でじたるかめらでとる。", exampleMeaning: "디지털 카메라로 찍는다." },
-  { word: "テニスコート", reading: "てにすこーと", meaning: "테니스 코트", pos: "명사·외래어", years: ["외래어"], example: "テニスコートを予約する。", exampleReading: "てにすこーとをよやくする。", exampleMeaning: "테니스 코트를 예약한다." },
-  { word: "ドラマ", reading: "どらま", meaning: "드라마", pos: "명사·외래어", years: ["외래어"], example: "テレビドラマを見る。", exampleReading: "てれびどらまをみる。", exampleMeaning: "TV 드라마를 본다." },
-  { word: "トイレットペーパー", reading: "といれっとぺーぱー", meaning: "화장지", pos: "명사·외래어", years: ["외래어"], example: "トイレットペーパーを買う。", exampleReading: "といれっとぺーぱーをかう。", exampleMeaning: "화장지를 산다." },
-  { word: "ドライブ", reading: "どらいぶ", meaning: "드라이브", pos: "명사·동사·외래어", years: ["외래어"], example: "海沿いをドライブする。", exampleReading: "うみぞいをどらいぶする。", exampleMeaning: "해변가를 드라이브한다." },
-  { word: "パーセント", reading: "ぱーせんと", meaning: "퍼센트", pos: "명사·외래어", years: ["외래어"], example: "五十パーセント増えた。", exampleReading: "ごじゅうぱーせんとふえた。", exampleMeaning: "50% 늘었다." },
-  { word: "ハード", reading: "はーど", meaning: "하드, 고됨", pos: "형용사·명사·외래어", years: ["외래어"], example: "ハードなスケジュールだ。", exampleReading: "はーどなすけじゅーるだ。", exampleMeaning: "빡빡한 일정이다." },
-  { word: "バイキング", reading: "ばいきんぐ", meaning: "뷔페, 바이킹", pos: "명사·외래어", years: ["외래어"], example: "ランチバイキングに行く。", exampleReading: "らんちばいきんぐにいく。", exampleMeaning: "점심 뷔페에 간다." },
-  { word: "パス", reading: "ぱす", meaning: "패스, 통과", pos: "명사·동사·외래어", years: ["외래어"], example: "今回はパスする。", exampleReading: "こんかいはぱすする。", exampleMeaning: "이번엔 패스한다." },
-  { word: "バッグ", reading: "ばっぐ", meaning: "가방, 백", pos: "명사·외래어", years: ["외래어"], example: "新しいバッグを買う。", exampleReading: "あたらしいばっぐをかう。", exampleMeaning: "새 가방을 산다." },
-  { word: "パッケージ", reading: "ぱっけーじ", meaning: "패키지, 포장", pos: "명사·외래어", years: ["외래어"], example: "パッケージを見る。", exampleReading: "ぱっけーじをみる。", exampleMeaning: "패키지를 본다." },
-  { word: "パレード", reading: "ぱれーど", meaning: "퍼레이드", pos: "명사·외래어", years: ["외래어"], example: "パレードを見る。", exampleReading: "ぱれーどをみる。", exampleMeaning: "퍼레이드를 본다." },
-  { word: "ハンバーガー", reading: "はんばーがー", meaning: "햄버거", pos: "명사·외래어", years: ["외래어"], example: "ハンバーガーを食べる。", exampleReading: "はんばーがーをたべる。", exampleMeaning: "햄버거를 먹는다." },
-  { word: "ピクニック", reading: "ぴくにっく", meaning: "피크닉, 소풍", pos: "명사·동사·외래어", years: ["외래어"], example: "公園でピクニックする。", exampleReading: "こうえんでぴくにっくする。", exampleMeaning: "공원에서 소풍한다." },
-  { word: "ビジネス", reading: "びじねす", meaning: "비즈니스", pos: "명사·외래어", years: ["외래어"], example: "ビジネスで使う。", exampleReading: "びじねすでつかう。", exampleMeaning: "비즈니스에서 사용한다." },
-  { word: "ビデオ", reading: "びでお", meaning: "비디오", pos: "명사·외래어", years: ["외래어"], example: "ビデオを撮る。", exampleReading: "びでおをとる。", exampleMeaning: "비디오를 찍는다." },
-  { word: "ファックス", reading: "ふぁっくす", meaning: "팩스", pos: "명사·동사·외래어", years: ["외래어"], example: "ファックスを送る。", exampleReading: "ふぁっくすをおくる。", exampleMeaning: "팩스를 보낸다." },
-  { word: "ファン", reading: "ふぁん", meaning: "팬", pos: "명사·외래어", years: ["외래어"], example: "応援するファンが多い。", exampleReading: "おうえんするふぁんがおおい。", exampleMeaning: "응원하는 팬이 많다." },
-  { word: "プラス", reading: "ぷらす", meaning: "플러스, 더함", pos: "명사·동사·외래어", years: ["외래어"], example: "プラスになる経験だ。", exampleReading: "ぷらすになるけいけんだ。", exampleMeaning: "플러스가 되는 경험이다." },
-  { word: "プラットホーム", reading: "ぷらっとほーむ", meaning: "플랫폼, 승강장", pos: "명사·외래어", years: ["외래어"], example: "プラットホームで待つ。", exampleReading: "ぷらっとほーむでまつ。", exampleMeaning: "승강장에서 기다린다." },
-  { word: "フランス", reading: "ふらんす", meaning: "프랑스", pos: "명사·외래어", years: ["외래어"], example: "フランスへ旅行する。", exampleReading: "ふらんすへりょこうする。", exampleMeaning: "프랑스로 여행한다." },
-  { word: "プリンター", reading: "ぷりんたー", meaning: "프린터", pos: "명사·외래어", years: ["외래어"], example: "プリンターで印刷する。", exampleReading: "ぷりんたーでいんさつする。", exampleMeaning: "프린터로 인쇄한다." },
-  { word: "プリント", reading: "ぷりんと", meaning: "프린트, 인쇄물", pos: "명사·동사·외래어", years: ["외래어"], example: "プリントを配る。", exampleReading: "ぷりんとをくばる。", exampleMeaning: "프린트를 나눠 준다." },
-  { word: "ペットボトル", reading: "ぺっとぼとる", meaning: "페트병", pos: "명사·외래어", years: ["외래어"], example: "ペットボトルを捨てる。", exampleReading: "ぺっとぼとるをすてる。", exampleMeaning: "페트병을 버린다." },
-  { word: "ホーム", reading: "ほーむ", meaning: "홈, 승강장, 집", pos: "명사·외래어", years: ["외래어"], example: "ホームで電車を待つ。", exampleReading: "ほーむでんしゃをまつ。", exampleMeaning: "승강장에서 전철을 기다린다." },
-  { word: "ホームステイ", reading: "ほーむすてい", meaning: "홈스테이", pos: "명사·동사·외래어", years: ["외래어"], example: "ホームステイをする。", exampleReading: "ほーむすていをする。", exampleMeaning: "홈스테이를 한다." },
-  { word: "ホームページ", reading: "ほーむぺーじ", meaning: "홈페이지", pos: "명사·외래어", years: ["외래어"], example: "ホームページを見る。", exampleReading: "ほーむぺーじをみる。", exampleMeaning: "홈페이지를 본다." },
-  { word: "ボール", reading: "ぼーる", meaning: "공, 볼", pos: "명사·외래어", years: ["외래어"], example: "ボールを投げる。", exampleReading: "ぼーるをなげる。", exampleMeaning: "공을 던진다." },
-  { word: "ポスター", reading: "ぽすたー", meaning: "포스터", pos: "명사·외래어", years: ["외래어"], example: "ポスターを貼る。", exampleReading: "ぽすたーをはる。", exampleMeaning: "포스터를 붙인다." },
-  { word: "ホステル", reading: "ほすてる", meaning: "호스텔", pos: "명사·외래어", years: ["외래어"], example: "ホステルに泊まる。", exampleReading: "ほすてるにとまる。", exampleMeaning: "호스텔에 묵는다." },
-  { word: "ホストファミリー", reading: "ほすとふぁみりー", meaning: "호스트 패밀리", pos: "명사·외래어", years: ["외래어"], example: "ホストファミリーと話す。", exampleReading: "ほすとふぁみりーとはなす。", exampleMeaning: "호스트 패밀리와 이야기한다." },
-  { word: "マーク", reading: "まーく", meaning: "마크, 기호", pos: "명사·외래어", years: ["외래어"], example: "マークを確認する。", exampleReading: "まーくをかくにんする。", exampleMeaning: "마크를 확인한다." },
-  { word: "マラソン", reading: "まらそん", meaning: "마라톤", pos: "명사·외래어", years: ["외래어"], example: "マラソン大会に出る。", exampleReading: "まらそんたいかいにでる。", exampleMeaning: "마라톤 대회에 나간다." },
-  { word: "マンション", reading: "まんしょん", meaning: "맨션, 아파트", pos: "명사·외래어", years: ["외래어"], example: "マンションに住む。", exampleReading: "まんしょんにすむ。", exampleMeaning: "맨션에 산다." },
-  { word: "メール", reading: "めーる", meaning: "메일", pos: "명사·동사·외래어", years: ["외래어"], example: "メールを送る。", exampleReading: "めーるをおくる。", exampleMeaning: "메일을 보낸다." },
-  { word: "メッセージ", reading: "めっせーじ", meaning: "메시지", pos: "명사·외래어", years: ["외래어"], example: "メッセージを残す。", exampleReading: "めっせーじをのこす。", exampleMeaning: "메시지를 남긴다." },
-  { word: "メモ", reading: "めも", meaning: "메모", pos: "명사·동사·외래어", years: ["외래어"], example: "メモを取る。", exampleReading: "めもをとる。", exampleMeaning: "메모를 한다." },
-  { word: "メニュー", reading: "めにゅー", meaning: "메뉴", pos: "명사·외래어", years: ["외래어"], example: "メニューを選ぶ。", exampleReading: "めにゅーをえらぶ。", exampleMeaning: "메뉴를 고른다." },
-  { word: "メリット", reading: "めりっと", meaning: "장점, 메리트", pos: "명사·외래어", years: ["외래어"], example: "メリットが大きい。", exampleReading: "めりっとがおおきい。", exampleMeaning: "장점이 크다." },
-  { word: "ライト", reading: "らいと", meaning: "라이트, 조명", pos: "명사·외래어", years: ["외래어"], example: "ライトをつける。", exampleReading: "らいとをつける。", exampleMeaning: "조명을 켠다." },
-  { word: "ライオン", reading: "らいおん", meaning: "사자", pos: "명사·외래어", years: ["외래어"], example: "動物園でライオンを見る。", exampleReading: "どうぶつえんでらいおんをみる。", exampleMeaning: "동물원에서 사자를 본다." },
-  { word: "ランチ", reading: "らんち", meaning: "런치, 점심", pos: "명사·외래어", years: ["외래어"], example: "友達とランチする。", exampleReading: "ともだちとらんちする。", exampleMeaning: "친구와 점심을 먹는다." },
-  { word: "リーダー", reading: "りーだー", meaning: "리더", pos: "명사·외래어", years: ["외래어"], example: "チームのリーダーだ。", exampleReading: "ちーむのりーだーだ。", exampleMeaning: "팀 리더다." },
-  { word: "リビング", reading: "りびんぐ", meaning: "거실", pos: "명사·외래어", years: ["외래어"], example: "リビングでくつろぐ。", exampleReading: "りびんぐでくつろぐ。", exampleMeaning: "거실에서 편히 쉰다." },
-  { word: "ルーム", reading: "るーむ", meaning: "룸, 방", pos: "명사·외래어", years: ["외래어"], example: "会議室を予約する。", exampleReading: "かいぎしつをよやくする。", exampleMeaning: "회의실을 예약한다." },
-  { word: "レンタカー", reading: "れんたかー", meaning: "렌터카", pos: "명사·외래어", years: ["외래어"], example: "レンタカーを借りる。", exampleReading: "れんたかーをかりる。", exampleMeaning: "렌터카를 빌린다." },
-  { word: "レンタル", reading: "れんたる", meaning: "대여, 렌털", pos: "명사·동사·외래어", years: ["외래어"], example: "道具をレンタルする。", exampleReading: "どうぐをれんたるする。", exampleMeaning: "도구를 대여한다." },
-  { word: "レベル", reading: "れべる", meaning: "레벨, 수준", pos: "명사·외래어", years: ["외래어"], example: "レベルが上がる。", exampleReading: "れべるがあがる。", exampleMeaning: "수준이 오른다." },
-  { word: "ワンピース", reading: "わんぴーす", meaning: "원피스", pos: "명사·외래어", years: ["외래어"], example: "ワンピースを着る。", exampleReading: "わんぴーすをきる。", exampleMeaning: "원피스를 입는다." },
-
-  // [예상어휘: 접두어·접미어] (기호 〜 제외)
-  { word: "新", reading: "しん", meaning: "새로운", pos: "접두어", years: ["접두어"], example: "新製品が出た。", exampleReading: "しんせいひんがでた。", exampleMeaning: "신제품이 나왔다." },
-  { word: "全", reading: "ぜん", meaning: "전부의, 모든", pos: "접두어", years: ["접두어"], example: "全員が参加した。", exampleReading: "ぜんいんがさんかした。", exampleMeaning: "전원이 참가했다." },
-  { word: "不", reading: "ふ", meaning: "불, 비", pos: "접두어", years: ["접두어"], example: "不安を感じる。", exampleReading: "ふあんをかんじる。", exampleMeaning: "불안을 느낀다." },
-  { word: "初", reading: "しょ", meaning: "초, 처음", pos: "접두어", years: ["접두어"], example: "初級から始める。", exampleReading: "しょきゅうからはじめる。", exampleMeaning: "초급부터 시작한다." },
-  { word: "毎", reading: "まい", meaning: "매, 마다", pos: "접두어", years: ["접두어"], example: "毎日勉強する。", exampleReading: "まいにちべんきょうする。", exampleMeaning: "매일 공부한다." },
-  { word: "高", reading: "こう", meaning: "고, 높은", pos: "접두어", years: ["접두어"], example: "高品質な品だ。", exampleReading: "こうひんしつなしなだ。", exampleMeaning: "고품질 물건이다." },
-  { word: "名", reading: "めい", meaning: "명, 이름난", pos: "접두어", years: ["접두어"], example: "名所を訪ねる。", exampleReading: "めいしょをおとずねる。", exampleMeaning: "명소를 방문한다." },
-  { word: "費", reading: "ひ", meaning: "비, 비용", pos: "접미어", years: ["접미어"], example: "食費を節約する。", exampleReading: "しょくひをせつやくする。", exampleMeaning: "식비를 절약한다." },
-  { word: "料", reading: "りょう", meaning: "요금, 료", pos: "접미어", years: ["접미어"], example: "参加料を払う。", exampleReading: "さんかりょうをはらう。", exampleMeaning: "참가비를 낸다." },
-  { word: "券", reading: "けん", meaning: "권, 표", pos: "접미어", years: ["접미어"], example: "入場券を買う。", exampleReading: "にゅうじょうけんをかう。", exampleMeaning: "입장권을 산다." },
-  { word: "代", reading: "だい", meaning: "대, 값", pos: "접미어", years: ["접미어"], example: "電車代がかかる。", exampleReading: "でんしゃだいがかかる。", exampleMeaning: "전철비가 든다." },
-  { word: "割引", reading: "わりびき", meaning: "할인", pos: "접미어", years: ["접미어"], example: "学生割引がある。", exampleReading: "がくせいわりびきがある。", exampleMeaning: "학생 할인이 있다." },
-  { word: "込み", reading: "こみ", meaning: "포함", pos: "접미어", years: ["접미어"], example: "送料込みの値段だ。", exampleReading: "そうりょうこみのねだんだ。", exampleMeaning: "배송비 포함 가격이다." },
-  { word: "中", reading: "ちゅう", meaning: "중", pos: "접미어", years: ["접미어"], example: "授業中だ。", exampleReading: "じゅぎょうちゅうだ。", exampleMeaning: "수업 중이다." },
-  { word: "風", reading: "ふう", meaning: "풍, 스타일", pos: "접미어", years: ["접미어"], example: "和風の部屋だ。", exampleReading: "わふうのへやだ。", exampleMeaning: "일본풍 방이다." },
-  { word: "式", reading: "しき", meaning: "식, 방식", pos: "접미어", years: ["접미어"], example: "自動式のドアだ。", exampleReading: "じどうしきのだあだ。", exampleMeaning: "자동식 문이다." },
-  { word: "用", reading: "よう", meaning: "용도", pos: "접미어", years: ["접미어"], example: "子供用の本だ。", exampleReading: "こどもようのほんだ。", exampleMeaning: "어린이용 책이다." },
-  { word: "向け", reading: "むけ", meaning: "향, 대상", pos: "접미어", years: ["접미어"], example: "初心者向けの講座だ。", exampleReading: "しょしんしゃむけのこうざだ。", exampleMeaning: "초보자용 강좌다." },
-  { word: "性", reading: "せい", meaning: "성, 성질", pos: "접미어", years: ["접미어"], example: "安全性が高い。", exampleReading: "あんぜんせいがたかい。", exampleMeaning: "안전성이 높다." },
-  { word: "化", reading: "か", meaning: "화", pos: "접미어", years: ["접미어"], example: "変化が起きる。", exampleReading: "へんかがおきる。", exampleMeaning: "변화가 생긴다." },
-  { word: "的", reading: "てき", meaning: "적", pos: "접미어", years: ["접미어"], example: "具体的な例を出す。", exampleReading: "ぐたいてきなれいをだす。", exampleMeaning: "구체적인 예를 든다." },
-  { word: "感", reading: "かん", meaning: "감, 느낌", pos: "접미어", years: ["접미어"], example: "安心感がある。", exampleReading: "あんしんかんがある。", exampleMeaning: "안심감이 있다." },
-  { word: "味", reading: "み", meaning: "맛, 기운", pos: "접미어", years: ["접미어"], example: "甘味がある。", exampleReading: "あまみがある。", exampleMeaning: "단맛이 있다." },
-  { word: "ぶり", reading: "ぶり", meaning: "만(경과)", pos: "접미어", years: ["접미어"], example: "久しぶりの再会だ。", exampleReading: "ひさしぶりのさいかいだ。", exampleMeaning: "오랜만의 재회다." },
-  { word: "がち", reading: "がち", meaning: "~하기 쉽다", pos: "접미어", years: ["접미어"], example: "忘れがちになる。", exampleReading: "わすれがちになる。", exampleMeaning: "잊기 쉽다." },
-  { word: "ぎみ", reading: "ぎみ", meaning: "~기미", pos: "접미어", years: ["접미어"], example: "少し疲れぎみだ。", exampleReading: "すこしつかれぎみだ。", exampleMeaning: "조금 피곤한 기미다." },
-  { word: "同士", reading: "どうし", meaning: "~끼리", pos: "접미어", years: ["접미어"], example: "友達同士で話す。", exampleReading: "ともだちどうしではなす。", exampleMeaning: "친구끼리 이야기한다." },
-  { word: "だらけ", reading: "だらけ", meaning: "~투성이", pos: "접미어", years: ["접미어"], example: "間違いだらけだ。", exampleReading: "まちがいだらけだ。", exampleMeaning: "실수 투성이다." },
-  { word: "まみれ", reading: "まみれ", meaning: "~범벅", pos: "접미어", years: ["접미어"], example: "汗まみれになる。", exampleReading: "あせまみれになる。", exampleMeaning: "땀 범벅이 된다." },
-  { word: "っぽい", reading: "っぽい", meaning: "~스러운", pos: "접미어", years: ["접미어"], example: "大人っぽい服だ。", exampleReading: "おとなっぽいふくだ。", exampleMeaning: "어른스러운 옷이다." },
-  { word: "つつ", reading: "つつ", meaning: "~하면서도", pos: "접미어", years: ["접미어"], example: "考えつつ歩く。", exampleReading: "かんがえつつあるく。", exampleMeaning: "생각하면서도 걷는다." },
-  { word: "ながら", reading: "ながら", meaning: "~하면서", pos: "접미어", years: ["접미어"], example: "音楽を聴きながら歩く。", exampleReading: "おんがくをききながらあるく。", exampleMeaning: "음악을 들으며 걷는다." },
-
-  // [예상어휘: 유의어·관용구·접속사·합성동사·확인문제]
-  { word: "おしゃべりな", reading: "おしゃべりな", meaning: "수다스러운", pos: "형용사", synonym: "よく話す", years: ["유의어·관용구"], example: "おしゃべりな人だ。", exampleReading: "おしゃべりなひとだ。", exampleMeaning: "수다스러운 사람이다." },
-  { word: "よく話す", reading: "よくはなす", meaning: "말을 많이 하다", pos: "동사", synonym: "おしゃべりな", years: ["유의어·관용구"], example: "よく話す友達だ。", exampleReading: "よくはなすともだちだ。", exampleMeaning: "말을 많이 하는 친구다." },
-  { word: "おそらく", reading: "おそらく", meaning: "아마도", pos: "부사", synonym: "たぶん", years: ["유의어·관용구"], example: "おそらく間に合う。", exampleReading: "おそらくまにあう。", exampleMeaning: "아마 맞출 것이다." },
-  { word: "たぶん", reading: "たぶん", meaning: "아마", pos: "부사", synonym: "おそらく", years: ["유의어·관용구"], example: "たぶん晴れる。", exampleReading: "たぶんはれる。", exampleMeaning: "아마 갤 것이다." },
-  { word: "オフ", reading: "おふ", meaning: "휴무, 쉬는 날", pos: "명사·외래어", synonym: "休み", years: ["유의어·관용구"], example: "明日はオフだ。", exampleReading: "あしたはおふだ。", exampleMeaning: "내일은 쉬는 날이다." },
-  { word: "休み", reading: "やすみ", meaning: "휴일, 쉼", pos: "명사", synonym: "オフ", years: ["유의어·관용구"], example: "休みに旅行する。", exampleReading: "やすみにりょこうする。", exampleMeaning: "휴일에 여행한다." },
-  { word: "気に入る", reading: "きにいる", meaning: "마음에 들다", pos: "동사", synonym: "好きになる", years: ["유의어·관용구"], example: "新しい服を気に入る。", exampleReading: "あたらしいふくをきにいる。", exampleMeaning: "새 옷이 마음에 든다." },
-  { word: "好きになる", reading: "すきになる", meaning: "좋아하게 되다", pos: "동사", synonym: "気に入る", years: ["유의어·관용구"], example: "だんだん好きになる。", exampleReading: "だんだんすきになる。", exampleMeaning: "점점 좋아하게 된다." },
-  { word: "ぐっと", reading: "ぐっと", meaning: "훨씬, 꾹", pos: "부사", years: ["유의어·관용구"], example: "ぐっと寒くなる。", exampleReading: "ぐっとさむくなる。", exampleMeaning: "훨씬 추워진다." },
-  { word: "暮らし", reading: "くらし", meaning: "생활", pos: "명사", synonym: "生活", years: ["유의어·관용구"], example: "静かな暮らしだ。", exampleReading: "しずかなくらしだ。", exampleMeaning: "조용한 생활이다." },
-  { word: "生活", reading: "せいかつ", meaning: "생활", pos: "명사·동사", synonym: "暮らし", years: ["유의어·관용구", "독해 소재 어휘"], example: "生活習慣を整える。", exampleReading: "せいかつしゅうかんをととのえる。", exampleMeaning: "생활 습관을 정돈한다." },
-  { word: "暮らす", reading: "くらす", meaning: "살다", pos: "동사", synonym: "生活する", years: ["유의어·관용구"], example: "家族と暮らす。", exampleReading: "かぞくとくらす。", exampleMeaning: "가족과 산다." },
-  { word: "生活する", reading: "せいかつする", meaning: "생활하다", pos: "동사", synonym: "暮らす", years: ["유의어·관용구"], example: "日本で生活する。", exampleReading: "にほんでせいかつする。", exampleMeaning: "일본에서 생활한다." },
-  { word: "苦しい", reading: "くるしい", meaning: "괴롭다, 힘들다", pos: "형용사", synonym: "つらい", years: ["유의표현"], example: "苦しい時期を乗り越える。", exampleReading: "くるしいじきをのりこえる。", exampleMeaning: "힘든 시기를 극복한다." },
-  { word: "つらい", reading: "つらい", meaning: "괴롭다, 힘들다", pos: "형용사", synonym: "苦しい", years: ["유의어·관용구"], example: "つらいこともある。", exampleReading: "つらいこともある。", exampleMeaning: "힘든 일도 있다." },
-  { word: "決して", reading: "けっして", meaning: "결코", pos: "부사", synonym: "ぜったいに", years: ["유의어·관용구"], example: "決して忘れない。", exampleReading: "けっしてわすれない。", exampleMeaning: "결코 잊지 않는다." },
-  { word: "ぜったいに", reading: "ぜったいに", meaning: "절대로", pos: "부사", synonym: "決して", years: ["유의어·관용구"], example: "ぜったいに守る。", exampleReading: "ぜったいにまもる。", exampleMeaning: "절대로 지킨다." },
-  { word: "わるいところ", reading: "わるいところ", meaning: "단점, 나쁜 점", pos: "표현", synonym: "欠点", years: ["유의어·관용구"], example: "わるいところを直す。", exampleReading: "わるいところをなおす。", exampleMeaning: "단점을 고친다." },
-  { word: "元気になる", reading: "げんきになる", meaning: "건강을 회복하다", pos: "동사", synonym: "健康を回復する", years: ["유의어·관용구"], example: "休んで元気になる。", exampleReading: "やすんでげんきになる。", exampleMeaning: "쉬어서 기운을 차린다." },
-  { word: "健康を回復する", reading: "けんこうをかいふくする", meaning: "건강을 회복하다", pos: "동사", synonym: "元気になる", years: ["유의어·관용구"], example: "健康を回復する。", exampleReading: "けんこうをかいふくする。", exampleMeaning: "건강을 회복한다." },
-  { word: "細かく", reading: "こまかく", meaning: "자세히, 잘게", pos: "부사", synonym: "こまかく", years: ["유의어·관용구"], example: "細かく分ける。", exampleReading: "こまかくわける。", exampleMeaning: "잘게 나눈다." },
-  { word: "壊れる", reading: "こわれる", meaning: "고장 나다", pos: "동사", synonym: "こわれる", years: ["유의어·관용구"], example: "時計が壊れる。", exampleReading: "とけいがこわれる。", exampleMeaning: "시계가 고장 난다." },
-  { word: "このあいだの", reading: "このあいだの", meaning: "지난번의", pos: "표현", synonym: "先日の", years: ["유의어·관용구"], example: "このあいだの話だ。", exampleReading: "このあいだのはなしだ。", exampleMeaning: "지난번 이야기다." },
-  { word: "先日の", reading: "せんじつの", meaning: "지난번의", pos: "표현", synonym: "このあいだの", years: ["유의어·관용구"], example: "先日の件について聞く。", exampleReading: "せんじつのけんについてきく。", exampleMeaning: "지난번 건에 대해 묻는다." },
-  { word: "ころす", reading: "ころす", meaning: "죽이다", pos: "동사", years: ["유의어·관용구"], example: "音をころす。", exampleReading: "おとをころす。", exampleMeaning: "소리를 죽인다." },
-  { word: "少なくとも", reading: "すくなくとも", meaning: "적어도", pos: "부사", years: ["유의어·관용구"], example: "少なくとも十人はいる。", exampleReading: "すくなくともじゅうにんはいる。", exampleMeaning: "적어도 10명은 있다." },
-  { word: "サンプル", reading: "さんぷる", meaning: "견본, 샘플", pos: "명사·외래어", synonym: "見本", years: ["유의어·관용구"], example: "サンプルを試す。", exampleReading: "さんぷるをためす。", exampleMeaning: "샘플을 써 본다." },
-  { word: "できごと", reading: "できごと", meaning: "사건, 일", pos: "명사", synonym: "事件", years: ["유의어·관용구"], example: "うれしいできごとだ。", exampleReading: "うれしいできごとだ。", exampleMeaning: "기쁜 일이다." },
-  { word: "事件", reading: "じけん", meaning: "사건", pos: "명사", synonym: "できごと", years: ["유의어·관용구"], example: "事件のニュースを見る。", exampleReading: "じけんのにゅーすをみる。", exampleMeaning: "사건 뉴스를 본다." },
-  { word: "もうしわけない", reading: "もうしわけない", meaning: "미안하다, 죄송하다", pos: "형용사", years: ["유의어·관용구"], example: "遅れてもうしわけない。", exampleReading: "おくれてもうしわけない。", exampleMeaning: "늦어서 죄송하다." },
-  { word: "そっくりだ", reading: "そっくりだ", meaning: "똑같다", pos: "형용사", years: ["유의어·관용구"], example: "そっくりな顔だ。", exampleReading: "そっくりなかおだ。", exampleMeaning: "똑같은 얼굴이다." },
-  { word: "ただ", reading: "ただ", meaning: "무료, 공짜", pos: "명사·부사", synonym: "無料", years: ["유의어·관용구"], example: "入場はただだ。", exampleReading: "にゅうじょうはただだ。", exampleMeaning: "입장은 무료다." },
-  { word: "無料", reading: "むりょう", meaning: "무료", pos: "명사·형용사", synonym: "ただ", years: ["유의어·관용구"], example: "無料で利用できる。", exampleReading: "むりょうりようできる。", exampleMeaning: "무료로 이용할 수 있다." },
-  { word: "テスト", reading: "てすと", meaning: "시험, 테스트", pos: "명사·동사·외래어", years: ["유의어·관용구"], example: "テストを受ける。", exampleReading: "てすとをうける。", exampleMeaning: "시험을 본다." },
-  { word: "ぜひ", reading: "ぜひ", meaning: "꼭", pos: "부사", synonym: "どうしても", years: ["유의어·관용구"], example: "ぜひ来てください。", exampleReading: "ぜひきてください。", exampleMeaning: "꼭 와 주세요." },
-  { word: "しかる", reading: "しかる", meaning: "야단치다", pos: "동사", synonym: "どなる", years: ["유의어·관용구"], example: "子どもをしかる。", exampleReading: "こどもをしかる。", exampleMeaning: "아이를 야단친다." },
-  { word: "内容がある", reading: "ないようがある", meaning: "내용이 있다", pos: "표현", years: ["유의어·관용구"], example: "深い内容がある話だ。", exampleReading: "ふかいないようがあるはなしだ。", exampleMeaning: "깊은 내용이 있는 이야기다." },
-  { word: "ぬぐ", reading: "ぬぐ", meaning: "벗다", pos: "동사", years: ["유의어·관용구"], example: "靴をぬぐ。", exampleReading: "くつをぬぐ。", exampleMeaning: "신발을 벗는다." },
-  { word: "のぞく", reading: "のぞく", meaning: "제외하다", pos: "동사", years: ["유의어·관용구"], example: "一部をのぞく。", exampleReading: "いちぶをのぞく。", exampleMeaning: "일부를 제외한다." },
-  { word: "ヒント", reading: "ひんと", meaning: "힌트, 단서", pos: "명사·외래어", synonym: "手がかり", years: ["유의어·관용구"], example: "ヒントを出す。", exampleReading: "ひんとをだす。", exampleMeaning: "힌트를 낸다." },
-  { word: "手がかり", reading: "てがかり", meaning: "단서", pos: "명사", synonym: "ヒント", years: ["유의어·관용구"], example: "手がかりを探す。", exampleReading: "てがかりをさがす。", exampleMeaning: "단서를 찾는다." },
-  { word: "ほうぼう", reading: "ほうぼう", meaning: "여기저기", pos: "명사·부사", synonym: "あちこち", years: ["유의어·관용구"], example: "ほうぼうを歩く。", exampleReading: "ほうぼうをあるく。", exampleMeaning: "여기저기를 걷는다." },
-  { word: "あちこち", reading: "あちこち", meaning: "여기저기", pos: "명사·부사", years: ["유의어·관용구", "확인문제"], example: "あちこち回る。", exampleReading: "あちこちまわる。", exampleMeaning: "여기저기 돌아다닌다." },
-  { word: "まもなく", reading: "まもなく", meaning: "곧, 머지않아", pos: "부사", synonym: "もうすぐ", years: ["유의어·관용구"], example: "まもなく始まる。", exampleReading: "まもなくはじまる。", exampleMeaning: "곧 시작한다." },
-  { word: "もうすぐ", reading: "もうすぐ", meaning: "곧", pos: "부사", synonym: "まもなく", years: ["유의어·관용구"], example: "もうすぐ着く。", exampleReading: "もうすぐつく。", exampleMeaning: "곧 도착한다." },
-  { word: "もっとも", reading: "もっとも", meaning: "가장", pos: "부사", synonym: "一番", years: ["유의어·관용구"], example: "もっとも大切なことだ。", exampleReading: "もっともたいせつなことだ。", exampleMeaning: "가장 중요한 일이다." },
-  { word: "一番", reading: "いちばん", meaning: "가장, 제일", pos: "명사·부사", synonym: "もっとも", years: ["유의어·관용구"], example: "一番好きな季節だ。", exampleReading: "いちばんすきなきせつだ。", exampleMeaning: "가장 좋아하는 계절이다." },
-  { word: "もらう", reading: "もらう", meaning: "받다", pos: "동사", years: ["유의어·관용구"], example: "アドバイスをもらう。", exampleReading: "あどばいすをもらう。", exampleMeaning: "조언을 받는다." },
-  { word: "厳しくない", reading: "きびしくない", meaning: "엄격하지 않다", pos: "형용사", synonym: "ゆるい", years: ["유의어·관용구"], example: "厳しくない先生だ。", exampleReading: "きびしくないせんせいだ。", exampleMeaning: "엄격하지 않은 선생님이다." },
-  { word: "予約する", reading: "よやくする", meaning: "예약하다", pos: "동사", years: ["유의어·관용구"], example: "席を予約する。", exampleReading: "せきをよやくする。", exampleMeaning: "좌석을 예약한다." },
-  { word: "および", reading: "および", meaning: "및", pos: "접속", years: ["접속·관용·합성"], example: "日時および場所を伝える。", exampleReading: "にちじおよびばしょをつたえる。", exampleMeaning: "일시 및 장소를 전한다." },
-  { word: "しかも", reading: "しかも", meaning: "게다가", pos: "접속", years: ["접속·관용·합성"], example: "安くて、しかもおいしい。", exampleReading: "やすくて、しかもおいしい。", exampleMeaning: "싸고 게다가 맛있다." },
-  { word: "したがって", reading: "したがって", meaning: "따라서", pos: "접속", years: ["접속·관용·합성"], example: "したがって変更になる。", exampleReading: "したがってへんこうになる。", exampleMeaning: "따라서 변경된다." },
-  { word: "それでも", reading: "それでも", meaning: "그런데도", pos: "접속", years: ["접속·관용·합성"], example: "それでも挑戦する。", exampleReading: "それでもちょうせんする。", exampleMeaning: "그런데도 도전한다." },
-  { word: "そこで", reading: "そこで", meaning: "그래서", pos: "접속", years: ["접속·관용·합성"], example: "そこで待つことにした。", exampleReading: "そこでまつことにした。", exampleMeaning: "그래서 기다리기로 했다." },
-  { word: "それとも", reading: "それとも", meaning: "아니면", pos: "접속", years: ["접속·관용·합성"], example: "お茶にしますか、それともコーヒーですか。", exampleReading: "おちゃにしますか、それともこーひーですか。", exampleMeaning: "차로 하시겠어요, 아니면 커피로 하시겠어요?" },
-  { word: "ところで", reading: "ところで", meaning: "그런데", pos: "접속", years: ["접속·관용·합성"], example: "ところで、今の状況はどうですか。", exampleReading: "ところで、いまのじょうきょうはどうですか。", exampleMeaning: "그런데 지금 상황은 어떻습니까?" },
-  { word: "それなのに", reading: "それなのに", meaning: "그런데도", pos: "접속", years: ["접속·관용·합성"], example: "それなのに失敗した。", exampleReading: "それなのにしっぱいした。", exampleMeaning: "그런데도 실패했다." },
-  { word: "ですから", reading: "ですから", meaning: "그러니까", pos: "접속", years: ["접속·관용·합성"], example: "ですから早く寝る。", exampleReading: "ですからはやくねる。", exampleMeaning: "그러니까 일찍 잔다." },
-  { word: "なぜなら", reading: "なぜなら", meaning: "왜냐하면", pos: "접속", years: ["접속·관용·합성"], example: "なぜなら必要だからだ。", exampleReading: "なぜならひつようだからだ。", exampleMeaning: "왜냐하면 필요하기 때문이다." },
-  { word: "それなら", reading: "それなら", meaning: "그렇다면", pos: "접속", years: ["접속·관용·합성"], example: "それなら大丈夫だ。", exampleReading: "それならだいじょうぶだ。", exampleMeaning: "그렇다면 괜찮다." },
-  { word: "ところが", reading: "ところが", meaning: "그런데", pos: "접속", years: ["접속·관용·합성"], example: "ところが雨が降った。", exampleReading: "ところがめがふった。", exampleMeaning: "그런데 비가 왔다." },
-  { word: "気がつく", reading: "きがつく", meaning: "눈치채다", pos: "관용구", years: ["접속·관용·합성"], example: "間違いに気がつく。", exampleReading: "まちがいにきがつく。", exampleMeaning: "실수를 눈치챈다." },
-  { word: "手を出す", reading: "てをだす", meaning: "손을 대다", pos: "관용구", years: ["접속·관용·합성"], example: "安易に手を出さない。", exampleReading: "あんいにてをださない。", exampleMeaning: "안이하게 손을 대지 않는다." },
-  { word: "夢見る", reading: "ゆめみる", meaning: "꿈꾸다", pos: "합성동사", years: ["접속·관용·합성"], example: "未来を夢見る。", exampleReading: "みらいをゆめみる。", exampleMeaning: "미래를 꿈꾼다." },
-
-  // [예상어휘 확인문제 수록 어휘]
-  { word: "才能", reading: "さいのう", meaning: "재능", pos: "명사", years: ["확인문제"], example: "才能を伸ばす。", exampleReading: "さいのうをのばす。", exampleMeaning: "재능을 키운다." },
-  { word: "今ごろ", reading: "いまごろ", meaning: "지금쯤", pos: "부사·명사", years: ["확인문제"], example: "今ごろ着いているだろう。", exampleReading: "いまごろついているだろう。", exampleMeaning: "지금쯤 도착했을 것이다." },
-  { word: "むかい", reading: "むかい", meaning: "맞은편", pos: "명사", years: ["확인문제"], example: "駅のむかいにある。", exampleReading: "えきのむかいにある。", exampleMeaning: "역 맞은편에 있다." },
-  { word: "実に", reading: "じつに", meaning: "참으로", pos: "부사", years: ["확인문제"], example: "実にわかりやすい。", exampleReading: "じつにわかりやすい。", exampleMeaning: "참으로 알기 쉽다." },
-  { word: "近づいてくる", reading: "ちかづいてくる", meaning: "다가오다", pos: "동사", years: ["확인문제"], example: "春が近づいてくる。", exampleReading: "はるがちかづいてくる。", exampleMeaning: "봄이 다가온다." },
-  { word: "あきらか", reading: "あきらか", meaning: "분명함", pos: "형용사", years: ["확인문제"], example: "あきらかな違いがある。", exampleReading: "あきらかなちがいがある。", exampleMeaning: "분명한 차이가 있다." },
-  { word: "だらけ", reading: "だらけ", meaning: "투성이", pos: "접미어", years: ["확인문제"], example: "ほこりだらけだ。", exampleReading: "ほこりだらけだ。", exampleMeaning: "먼지 투성이다." },
-  { word: "わきまえる", reading: "わきまえる", meaning: "분별하다, 알다", pos: "동사", years: ["확인문제"], example: "立場をわきまえる。", exampleReading: "たちばをわきまえる。", exampleMeaning: "입장을 분별한다." },
-  { word: "申し上げる", reading: "もうしあげる", meaning: "말씀드리다", pos: "동사", years: ["확인문제"], example: "お礼を申し上げる。", exampleReading: "おれいをもうしあげる。", exampleMeaning: "감사를 말씀드린다." },
-  { word: "わりには", reading: "わりには", meaning: "~치고는", pos: "표현", years: ["확인문제"], example: "安いわりにはいい。", exampleReading: "やすいわりにはいい。", exampleMeaning: "싼 것 치고 좋다." },
-  { word: "けわしい", reading: "けわしい", meaning: "험하다", pos: "형용사", years: ["확인문제"], example: "けわしい山道だ。", exampleReading: "けわしいやまみちだ。", exampleMeaning: "험한 산길이다." },
-  { word: "通用", reading: "つうよう", meaning: "통용", pos: "명사·동사", years: ["확인문제"], example: "どこでも通用する。", exampleReading: "どこでもつうようする。", exampleMeaning: "어디서나 통용된다." },
-  { word: "かたむいて", reading: "かたむいて", meaning: "기울어서", pos: "동사", years: ["확인문제"], example: "日がかたむいてきた。", exampleReading: "ひがかたむいてきた。", exampleMeaning: "해가 기울어 왔다." },
-  { word: "すぐれた", reading: "すぐれた", meaning: "뛰어난", pos: "형용사", years: ["확인문제"], example: "すぐれた技術だ。", exampleReading: "すぐれたぎじゅつだ。", exampleMeaning: "뛰어난 기술이다." },
-  { word: "まさか", reading: "まさか", meaning: "설마", pos: "부사", years: ["확인문제"], example: "まさか本当だとは思わない。", exampleReading: "まさかほんとうだとはおもわない。", exampleMeaning: "설마 진짜라고는 생각하지 않는다." },
-  { word: "必ずしも", reading: "かならずしも", meaning: "반드시 ~은 아닌", pos: "부사", years: ["확인문제"], example: "必ずしも同じではない。", exampleReading: "かならずしもおなじではない。", exampleMeaning: "반드시 같지는 않다." },
-  { word: "おもな", reading: "おもな", meaning: "주요한", pos: "형용사", years: ["확인문제"], example: "おもな原因を調べる。", exampleReading: "おもなげんいんをしらべる。", exampleMeaning: "주요 원인을 조사한다." },
-  { word: "締め切り", reading: "しめきり", meaning: "마감", pos: "명사", years: ["확인문제", "문맥구성"], example: "締め切りに遅れない。", exampleReading: "しめきりにおくれない。", exampleMeaning: "마감에 늦지 않는다." },
-  { word: "費用", reading: "ひよう", meaning: "비용", pos: "명사", years: ["확인문제"], example: "費用を抑える。", exampleReading: "ひようをおさえる。", exampleMeaning: "비용을 줄인다." },
-  { word: "手続き", reading: "てつづき", meaning: "절차, 수속", pos: "명사·동사", years: ["확인문제"], example: "手続きをする。", exampleReading: "てつづきをする。", exampleMeaning: "절차를 밟는다." },
-  { word: "支えられて", reading: "ささえられて", meaning: "지탱되어", pos: "동사", years: ["확인문제"], example: "みんなに支えられてきた。", exampleReading: "みんなにささえられてきた。", exampleMeaning: "모두에게 지탱받아 왔다." },
-  { word: "交通機関", reading: "こうつうきかん", meaning: "교통기관", pos: "명사", years: ["확인문제", "독해·청해"], example: "交通機関を使う。", exampleReading: "こうつうきかんをつかう。", exampleMeaning: "교통기관을 이용한다." },
-  { word: "具現化", reading: "ぐげんか", meaning: "구현화", pos: "명사·동사", years: ["확인문제"], example: "計画を具現化する。", exampleReading: "けいかくをぐげんかする。", exampleMeaning: "계획을 구현화한다." },
-  { word: "再開", reading: "さいかい", meaning: "재개", pos: "명사·동사", years: ["확인문제"], example: "営業を再開する。", exampleReading: "えいぎょうをさいかいする。", exampleMeaning: "영업을 재개한다." },
-  { word: "着々", reading: "ちゃくちゃく", meaning: "착착", pos: "부사", years: ["확인문제"], example: "準備が着々と進む。", exampleReading: "じゅんびがちゃくちゃくとすすむ。", exampleMeaning: "준비가 착착 진행된다." },
-  { word: "周囲", reading: "しゅうい", meaning: "주위", pos: "명사", years: ["확인문제"], example: "周囲を確認する。", exampleReading: "しゅういをかくにんする。", exampleMeaning: "주위를 확인한다." },
-  { word: "成分", reading: "せいぶん", meaning: "성분", pos: "명사", years: ["확인문제"], example: "成分を表示する。", exampleReading: "せいぶんをひょうじする。", exampleMeaning: "성분을 표시한다." },
-  { word: "散歩", reading: "さんぽ", meaning: "산책", pos: "명사·동사", years: ["확인문제", "문법·예문"], example: "公園を散歩する。", exampleReading: "こうえんをさんぽする。", exampleMeaning: "공원을 산책한다." },
-  { word: "助かる", reading: "たすかる", meaning: "도움이 되다, 구해지다", pos: "동사", years: ["확인문제"], example: "教えてくれて助かる。", exampleReading: "おしえてくれてたすかる。", exampleMeaning: "가르쳐 줘서 살았다." },
-  { word: "道路", reading: "どうろ", meaning: "도로", pos: "명사", years: ["확인문제"], example: "道路を走る。", exampleReading: "どうろをはしる。", exampleMeaning: "도로를 달린다." },
-  { word: "高学歴", reading: "こうがくれき", meaning: "고학력", pos: "명사", years: ["확인문제"], example: "高学歴化が進む。", exampleReading: "こうがくれきかがすすむ。", exampleMeaning: "고학력화가 진행된다." },
-
-  // [문법·독해·청해 파트 주요 단어] (문법 기호/구어 축약형 제외)
-  { word: "パスポート", reading: "ぱすぽーと", meaning: "여권", pos: "명사·외래어", years: ["문법·예문"], example: "パスポートを用意する。", exampleReading: "ぱすぽーとをよういする。", exampleMeaning: "여권을 준비한다." },
-  { word: "宿題", reading: "しゅくだい", meaning: "숙제", pos: "명사", years: ["문법·예문"], example: "宿題を終わらせる。", exampleReading: "しゅくだいをおわらせる。", exampleMeaning: "숙제를 끝낸다." },
-  { word: "地震", reading: "じしん", meaning: "지진", pos: "명사", years: ["문법·예문"], example: "地震に備える。", exampleReading: "じしんにそなえる。", exampleMeaning: "지진에 대비한다." },
-  { word: "電車", reading: "でんしゃ", meaning: "전철", pos: "명사", years: ["문법·예문"], example: "電車に乗る。", exampleReading: "でんしゃにのる。", exampleMeaning: "전철에 탄다." },
-  { word: "注文", reading: "ちゅうもん", meaning: "주문", pos: "명사·동사", years: ["문법·예문"], example: "料理を注文する。", exampleReading: "りょうりをちゅうもんする。", exampleMeaning: "요리를 주문한다." },
-  { word: "アルバイト", reading: "あるばいと", meaning: "아르바이트", pos: "명사·외래어", years: ["문법·예문"], example: "アルバイトをする。", exampleReading: "あるばいとをする。", exampleMeaning: "아르바이트를 한다." },
-  { word: "経験", reading: "けいけん", meaning: "경험", pos: "명사·동사", years: ["문법·예문", "독해·청해"], example: "いい経験になる。", exampleReading: "いいけいけんになる。", exampleMeaning: "좋은 경험이 된다." },
-  { word: "趣味", reading: "しゅみ", meaning: "취미", pos: "명사", years: ["문법·예문"], example: "趣味を楽しむ。", exampleReading: "しゅみをたのしむ。", exampleMeaning: "취미를 즐긴다." },
-  { word: "準備", reading: "じゅんび", meaning: "준비", pos: "명사·동사", years: ["문법·예문", "독해·청해"], example: "出発の準備をする。", exampleReading: "しゅっぱつのじゅんびをする。", exampleMeaning: "출발 준비를 한다." },
-  { word: "運動", reading: "うんどう", meaning: "운동", pos: "명사·동사", years: ["문법·예문"], example: "毎日運動する。", exampleReading: "まいにちうんどうする。", exampleMeaning: "매일 운동한다." },
-  { word: "連絡", reading: "れんらく", meaning: "연락", pos: "명사·동사", years: ["문법·예문", "독해·청해"], example: "後で連絡する。", exampleReading: "あとでれんらくする。", exampleMeaning: "나중에 연락한다." },
-  { word: "説明", reading: "せつめい", meaning: "설명", pos: "명사·동사", years: ["문법·예문", "독해·청해"], example: "詳しく説明する。", exampleReading: "くわしくせつめいする。", exampleMeaning: "자세히 설명한다." },
-  { word: "応援", reading: "おうえん", meaning: "응원", pos: "명사·동사", years: ["문법·예문"], example: "試合を応援する。", exampleReading: "しあいをおうえんする。", exampleMeaning: "시합을 응원한다." },
-  { word: "練習", reading: "れんしゅう", meaning: "연습", pos: "명사·동사", years: ["문법·예문"], example: "毎日練習する。", exampleReading: "まいにちれんしゅうする。", exampleMeaning: "매일 연습한다." },
-  { word: "心配", reading: "しんぱい", meaning: "걱정", pos: "명사·형용사·동사", years: ["문법·예문"], example: "天気を心配する。", exampleReading: "てんきをしんぱいする。", exampleMeaning: "날씨를 걱정한다." },
-  { word: "案内", reading: "あんない", meaning: "안내", pos: "명사·동사", years: ["독해·청해"], example: "会場を案内する。", exampleReading: "かいじょうをあんないする。", exampleMeaning: "행사장을 안내한다." },
-  { word: "割引", reading: "わりびき", meaning: "할인", pos: "명사·동사", years: ["독해·청해"], example: "割引になる。", exampleReading: "わりびきになる。", exampleMeaning: "할인이 된다." },
-  { word: "会場", reading: "かいじょう", meaning: "행사장", pos: "명사", years: ["독해·청해"], example: "会場へ行く。", exampleReading: "かいじょうへいく。", exampleMeaning: "행사장에 간다." },
-  { word: "体験", reading: "たいけん", meaning: "체험", pos: "명사·동사", years: ["독해·청해"], example: "文化を体験する。", exampleReading: "ぶんかをたいけんする。", exampleMeaning: "문화를 체험한다." },
-  { word: "料金", reading: "りょうきん", meaning: "요금", pos: "명사", years: ["독해·청해"], example: "料金を払う。", exampleReading: "りょうきんをはらう。", exampleMeaning: "요금을 낸다." },
-  { word: "自動", reading: "じどう", meaning: "자동", pos: "명사", years: ["독해·청해"], example: "自動ドアを通る。", exampleReading: "じどうどあをとおる。", exampleMeaning: "자동문을 지난다." },
-  { word: "整備", reading: "せいび", meaning: "정비", pos: "명사·동사", years: ["독해·청해"], example: "道路を整備する。", exampleReading: "どうろをせいびする。", exampleMeaning: "도로를 정비한다." },
-  { word: "ゴミ箱", reading: "ごみばこ", meaning: "쓰레기통", pos: "명사", years: ["독해·청해"], example: "ゴミ箱に捨てる。", exampleReading: "ごみばこにすてる。", exampleMeaning: "쓰레기통에 버린다." },
-  { word: "マナー", reading: "まなー", meaning: "매너, 예절", pos: "명사·외래어", years: ["독해·청해"], example: "マナーを守る。", exampleReading: "まなーをまもる。", exampleMeaning: "매너를 지킨다." },
-  { word: "栄養", reading: "えいよう", meaning: "영양", pos: "명사", years: ["독해·청해"], example: "栄養をとる。", exampleReading: "えいようをとる。", exampleMeaning: "영양을 섭취한다." },
-  { word: "食事", reading: "しょくじ", meaning: "식사", pos: "명사·동사", years: ["독해·청해"], example: "食事をする。", exampleReading: "しょくじをする。", exampleMeaning: "식사를 한다." },
-  { word: "確認", reading: "かくにん", meaning: "확인", pos: "명사·동사", years: ["독해·청해"], example: "時間を確認する。", exampleReading: "じかんをかくにんする。", exampleMeaning: "시간을 확인한다." },
-  { word: "仕事", reading: "しごと", meaning: "일, 직업", pos: "명사·동사", years: ["독해·청해"], example: "仕事が終わる。", exampleReading: "しごとがおわる。", exampleMeaning: "일이 끝난다." },
-  { word: "文化", reading: "ぶんか", meaning: "문화", pos: "명사", years: ["독해·청해"], example: "日本の文化を学ぶ。", exampleReading: "にほんのぶんかをまなぶ。", exampleMeaning: "일본 문화를 배운다." },
-  { word: "感想", reading: "かんそう", meaning: "감상", pos: "명사", years: ["독해·청해"], example: "感想を書く。", exampleReading: "かんそうをかく。", exampleMeaning: "감상을 쓴다." },
-  { word: "結果", reading: "けっか", meaning: "결과", pos: "명사", years: ["독해·청해"], example: "結果を待つ。", exampleReading: "けっかをまつ。", exampleMeaning: "결과를 기다린다." },
-  { word: "状況", reading: "じょうきょう", meaning: "상황", pos: "명사", years: ["독해·청해"], example: "状況を見る。", exampleReading: "じょうきょうをみる。", exampleMeaning: "상황을 본다." },
-  { word: "質問", reading: "しつもん", meaning: "질문", pos: "명사·동사", years: ["독해·청해"], example: "質問する。", exampleReading: "しつもんする。", exampleMeaning: "질문한다." },
-  { word: "答え", reading: "こたえ", meaning: "답, 해답", pos: "명사", years: ["독해·청해"], example: "答えを探す。", exampleReading: "こたえをさがす。", exampleMeaning: "답을 찾는다." },
-  { word: "学校", reading: "がっこう", meaning: "학교", pos: "명사", years: ["독해·청해"], example: "学校へ行く。", exampleReading: "がっこうへいく。", exampleMeaning: "학교에 간다." },
-  { word: "一回", reading: "いっかい", meaning: "한 번, 1회", pos: "명사", years: ["독해·청해"], example: "一回試す。", exampleReading: "いっかいためす。", exampleMeaning: "한 번 시도한다." },
-  { word: "圧迫", reading: "あっぱく", meaning: "압박", pos: "명사·동사", years: ["독해·청해"], example: "胸を圧迫する。", exampleReading: "むねをあっぱくする。", exampleMeaning: "가슴을 압박한다." },
-  { word: "錯覚", reading: "さっかく", meaning: "착각", pos: "명사·동사", years: ["독해·청해"], example: "目の錯覚だ。", exampleReading: "めのさっかくだ。", exampleMeaning: "눈의 착각이다." },
-  { word: "絶対", reading: "ぜったい", meaning: "절대", pos: "부사·명사", years: ["독해·청해"], example: "絶対守る。", exampleReading: "ぜったいまもる。", exampleMeaning: "절대 지킨다." },
-  { word: "決定", reading: "けってい", meaning: "결정", pos: "명사·동사", years: ["독해·청해"], example: "日程が決定する。", exampleReading: "にっていがけっていする。", exampleMeaning: "일정이 결정된다." },
-  { word: "世紀", reading: "せいき", meaning: "세기", pos: "명사", years: ["독해·청해"], example: "二十一世紀だ。", exampleReading: "にじゅういっせいきだ。", exampleMeaning: "21세기다." },
-  { word: "奉仕", reading: "ほうし", meaning: "봉사", pos: "명사·동사", years: ["독해·청해"], example: "奉仕活動をする。", exampleReading: "ほうしかつどうをする。", exampleMeaning: "봉사 활동을 한다." },
-  { word: "用意", reading: "ようい", meaning: "준비", pos: "명사·동사", years: ["독해·청해"], example: "道具を用意する。", exampleReading: "どうぐをよういする。", exampleMeaning: "도구를 준비한다." },
-  { word: "ソース", reading: "そーす", meaning: "소스", pos: "명사·외래어", years: ["독해·청해"], example: "ソースをかける。", exampleReading: "そーすをかける。", exampleMeaning: "소스를 뿌린다." },
-  { word: "客", reading: "きゃく", meaning: "손님, 객", pos: "명사", years: ["독해·청해"], example: "店に客が来る。", exampleReading: "みせにきゃくがくる。", exampleMeaning: "가게에 손님이 온다." },
-  { word: "通信", reading: "つうしん", meaning: "통신", pos: "명사·동사", years: ["독해·청해"], example: "通信で学ぶ。", exampleReading: "つうしんでまなぶ。", exampleMeaning: "통신으로 배운다." },
-  { word: "買う", reading: "かう", meaning: "사다", pos: "동사", years: ["독해·청해"], example: "本を買う。", exampleReading: "ほんをかう。", exampleMeaning: "책을 산다." },
-  { word: "公開", reading: "こうかい", meaning: "공개", pos: "명사·동사", years: ["독해·청해"], example: "情報を公開する。", exampleReading: "じょうほうをこうかいする。", exampleMeaning: "정보를 공개한다." },
-  { word: "後悔", reading: "こうかい", meaning: "후회", pos: "명사·동사", years: ["독해·청해"], example: "後で後悔しない。", exampleReading: "あとでこうかいしない。", exampleMeaning: "나중에 후회하지 않는다." },
-  { word: "強盗", reading: "ごうとう", meaning: "강도", pos: "명사", years: ["독해·청해"], example: "強盗のニュースだ。", exampleReading: "ごうとうのにゅーすだ。", exampleMeaning: "강도 뉴스다." },
-  { word: "象", reading: "ぞう", meaning: "코끼리", pos: "명사", years: ["독해·청해"], example: "大きな象を見る。", exampleReading: "おおきなぞうをみる。", exampleMeaning: "큰 코끼리를 본다." },
-  { word: "比較", reading: "ひかく", meaning: "비교", pos: "명사·동사", years: ["독해·청해"], example: "二つを比較する。", exampleReading: "ふたつをひかくする。", exampleMeaning: "둘을 비교한다." },
-  { word: "時代", reading: "じだい", meaning: "시대", pos: "명사", years: ["독해·청해"], example: "新しい時代だ。", exampleReading: "あたらしいじだいだ。", exampleMeaning: "새로운 시대다." },
-  { word: "進行", reading: "しんこう", meaning: "진행", pos: "명사·동사", years: ["독해·청해"], example: "順調に進行する。", exampleReading: "じゅんちょうにしんこうする。", exampleMeaning: "순조롭게 진행된다." },
-  { word: "貧困", reading: "ひんこん", meaning: "빈곤", pos: "명사", years: ["독해·청해"], example: "貧困の問題を考える。", exampleReading: "ひんこんのもんだいをかんがえる。", exampleMeaning: "빈곤 문제를 생각한다." },
-  { word: "乱暴", reading: "らんぼう", meaning: "난폭함", pos: "형용사·명사", years: ["독해·청해"], example: "乱暴な言葉を使う。", exampleReading: "らんぼうなことばをつかう。", exampleMeaning: "난폭한 말을 쓴다." },
-  { word: "団らん", reading: "だんらん", meaning: "단란함", pos: "명사·동사", years: ["독해·청해"], example: "家族の団らんを楽しむ。", exampleReading: "かぞくのだんらんをたのしむ。", exampleMeaning: "가족의 단란함을 즐긴다." },
-  { word: "罰", reading: "ばつ", meaning: "벌", pos: "명사", years: ["독해·청해"], example: "ルール違反の罰だ。", exampleReading: "るーるいはんのばつだ。", exampleMeaning: "규칙 위반 벌이다." },
-  { word: "数学", reading: "すうがく", meaning: "수학", pos: "명사", years: ["독해·청해"], example: "数学の問題を解く。", exampleReading: "すうがくのもんだいをとく。", exampleMeaning: "수학 문제를 푼다." },
-  { word: "通学", reading: "つうがく", meaning: "통학", pos: "명사·동사", years: ["독해·청해"], example: "電車で通学する。", exampleReading: "でんしゃでつうがくする。", exampleMeaning: "전철로 통학한다." },
-  { word: "罪", reading: "つみ", meaning: "죄", pos: "명사", years: ["독해·청해"], example: "罪を認める。", exampleReading: "つみをみとめる。", exampleMeaning: "죄를 인정한다." },
-  { word: "団子", reading: "だんご", meaning: "경단, 단고", pos: "명사", years: ["독해·청해"], example: "甘い団子を食べる。", exampleReading: "あまいだんごをたべる。", exampleMeaning: "달콤한 경단을 먹는다." },
-  { word: "天使", reading: "てんし", meaning: "천사", pos: "명사", years: ["독해·청해"], example: "天使の絵を描く。", exampleReading: "てんしのえをかく。", exampleMeaning: "천사 그림을 그린다." },
-  { word: "電子", reading: "でんし", meaning: "전자", pos: "명사", years: ["독해·청해"], example: "電子辞書を使う。", exampleReading: "でんしじしょをつかう。", exampleMeaning: "전자사전을 사용한다." },
-  { word: "換気", reading: "かんき", meaning: "환기", pos: "명사·동사", years: ["독해·청해"], example: "部屋を換気する。", exampleReading: "へやをかんきする。", exampleMeaning: "방을 환기한다." },
-  { word: "外観", reading: "がいかん", meaning: "외관", pos: "명사", years: ["독해·청해"], example: "建物の外観を見る。", exampleReading: "たてもののがいかんをみる。", exampleMeaning: "건물 외관을 본다." }
+  // [2장 예상 어휘공략하기: 명사 · 동사 · い/な형용사 · 부사 · 외래어 · 유의어]
+  {
+    word: "打ち合わせ",
+    reading: "うちあわせ",
+    meaning: "사전 협의, 조율, 미팅",
+    pos: "명사",
+    years: ["예상어휘(명사)"],
+    example: "発表の前にメンバーと打ち合わせをした。",
+    exampleReading: "はっぴょうのまえにめんばーとうちあわせをした。",
+    exampleMeaning: "발표 전에 멤버들과 사전 협의를 했습니다."
+  },
+  {
+    word: "きっかけ",
+    reading: "きっかけ",
+    meaning: "계기, 실마리",
+    pos: "명사",
+    years: ["예상어휘(명사)"],
+    example: "旅行がきっかけで日本語を勉強し始めた。",
+    exampleReading: "りょこうがきっかけでにほんごをべんきょうしはじめた。",
+    exampleMeaning: "여행이 계기가 되어 일본어를 공부하기 시작했습니다."
+  },
+  {
+    word: "貸し出し",
+    reading: "かしだし",
+    meaning: "대출, 대여",
+    pos: "명사",
+    years: ["예상어휘(명사)"],
+    example: "図書館の本は一人五冊まで貸し出しできる。",
+    exampleReading: "としょかんのほんはひとりごさつまでかしだしできる。",
+    exampleMeaning: "도서관 책은 1인당 5권까지 대출할 수 있습니다."
+  },
+  {
+    word: "受かる",
+    reading: "うかる",
+    meaning: "합격하다",
+    pos: "동사(오단·자동사)",
+    years: ["예상어휘(동사)"],
+    example: "努力したおかげで試験に受かった。",
+    exampleReading: "どりょくしたおかげでしけんにうかった。",
+    exampleMeaning: "노력한 덕분에 시험에 합격했습니다."
+  },
+  {
+    word: "取り入れる",
+    reading: "とりいれる",
+    meaning: "받아들이다, 도입하다",
+    pos: "동사(일어·타동사)",
+    years: ["예상어휘(동사)"],
+    example: "生活の中に軽い運動を取り入れている。",
+    exampleReading: "せいかつのなかにかるいうんどうをとりいれている。",
+    exampleMeaning: "생활 속에 가벼운 운동을 도입하고 있습니다."
+  },
+  {
+    word: "触れる",
+    reading: "ふれる",
+    meaning: "만지다, 접하다, 언급하다",
+    pos: "동사(일어·자동사)",
+    years: ["예상어휘(동사)"],
+    example: "展示品には直接触れないでください。",
+    exampleReading: "てんじひんにはちょくせつふれないでください。",
+    exampleMeaning: "전시품에는 직접 만지지 마세요."
+  },
+  {
+    word: "ありがたい",
+    reading: "ありがたい",
+    meaning: "고맙다, 감사하다",
+    pos: "い형용사",
+    years: ["예상어휘(い형용사)"],
+    example: "忙しいのに手伝ってもらって本当にありがたい。",
+    exampleReading: "いそがしいのにてつだってもらってほんとうにありがたい。",
+    exampleMeaning: "바쁜데 도와줘서 정말 고맙습니다."
+  },
+  {
+    word: "とんでもない",
+    reading: "とんでもない",
+    meaning: "말도 안 되다, 천만에",
+    pos: "い형용사",
+    years: ["예상어휘(い형용사)"],
+    example: "「お礼なんて」「とんでもない、当たり前のことです」",
+    exampleReading: "「おれいなんて」「とんでもない、あたりまえのことです」",
+    exampleMeaning: "“감사 인사는요.” “천만에요, 당연한 일입니다.”"
+  },
+  {
+    word: "ややこしい",
+    reading: "ややこしい",
+    meaning: "복잡하다, 까다롭다",
+    pos: "い형용사",
+    years: ["예상어휘(い형용사)"],
+    example: "ルールが少しややこしいので、例を見ながら確認しよう。",
+    exampleReading: "るーるがすこしややこしいので、れいをみながらかくにんしよう。",
+    exampleMeaning: "규칙이 조금 복잡하니 예를 보면서 확인합시다."
+  },
+  {
+    word: "あたりまえだ",
+    reading: "あたりまえだ",
+    meaning: "당연하다",
+    pos: "な형용사",
+    years: ["예상어휘(な형용사)"],
+    example: "約束を守ることはあたりまえだ。",
+    exampleReading: "やくそくをまもることはあたりまえだ。",
+    exampleMeaning: "약속을 지키는 것은 당연합니다."
+  },
+  {
+    word: "なめらかだ",
+    reading: "なめらかだ",
+    meaning: "매끄럽다, 부드럽다",
+    pos: "な형용사",
+    years: ["예상어휘(な형용사)"],
+    example: "このクリームは肌になじんでなめらかだ。",
+    exampleReading: "このくりーむははだになじんでなめらかだ。",
+    exampleMeaning: "이 크림은 피부에 스며들어 매끄럽습니다."
+  },
+  {
+    word: "いよいよ",
+    reading: "いよいよ",
+    meaning: "드디어, 마침내",
+    pos: "부사",
+    years: ["예상어휘(부사)"],
+    example: "明日はいよいよ試験本番だ。",
+    exampleReading: "あしたはいよいよしけんほんばんだ。",
+    exampleMeaning: "내일은 드디어 시험 당일입니다."
+  },
+  {
+    word: "せっかく",
+    reading: "せっかく",
+    meaning: "모처럼, 애써",
+    pos: "부사",
+    years: ["예상어휘(부사)"],
+    example: "せっかく作った料理だから冷めないうちに食べよう。",
+    exampleReading: "せっかくつくったりょうりだからさめないうちにたべよう。",
+    exampleMeaning: "모처럼 만든 요리니까 식기 전에 먹읍시다."
+  },
+  {
+    word: "いちいち",
+    reading: "いちいち",
+    meaning: "하나하나, 일일이",
+    pos: "부사",
+    years: ["예상어휘(부사)"],
+    example: "小さなミスをいちいち気にしなくてもいい。",
+    exampleReading: "ちいさなみすをいちいちきにしなくてもいい。",
+    exampleMeaning: "작은 실수를 일일이 신경 쓰지 않아도 됩니다."
+  },
+  {
+    word: "スケジュール",
+    reading: "すけじゅーる",
+    meaning: "스케줄, 일정",
+    pos: "외래어",
+    years: ["예상어휘(외래어)", "2022년 기출(유의표현)"],
+    example: "旅行のスケジュールをみんなで決めた。",
+    exampleReading: "りょこうのすけじゅーるをみんなできめた。",
+    exampleMeaning: "여행 일정을 다 같이 정했습니다."
+  },
+  {
+    word: "サービス",
+    reading: "さーびす",
+    meaning: "서비스",
+    pos: "외래어",
+    years: ["예상어휘(외래어)", "2010년 기출(유의표현)"],
+    example: "この店は店員のサービスが丁寧で人気がある。",
+    exampleReading: "このみせはてんいんのさーびすがていねいでにんきがある。",
+    exampleMeaning: "이 가게는 직원의 서비스가 정중해서 인기가 있습니다."
+  },
+  {
+    word: "コミュニケーション",
+    reading: "こみゅにけーしょん",
+    meaning: "커뮤니케이션, 의사소통",
+    pos: "외래어",
+    years: ["예상어휘(외래어)"],
+    example: "チームでは日常的なコミュニケーションが大切だ。",
+    exampleReading: "ちーむではにちじょうてきなこみゅにけーしょんがたいせつだ。",
+    exampleMeaning: "팀에서는 일상적인 커뮤니케이션이 중요합니다."
+  },
+  {
+    word: "手がかり",
+    reading: "てがかり",
+    meaning: "단서, 실마리",
+    pos: "명사",
+    synonym: "ヒント",
+    years: ["예상어휘(유의어)"],
+    example: "事件を解決するための手がかりを見つけた。",
+    exampleReading: "じけんをかいけつするためのてがかりをみつけた。",
+    exampleMeaning: "사건을 해결하기 위한 단서를 찾았습니다."
+  },
+  {
+    word: "まもなく",
+    reading: "まもなく",
+    meaning: "곧, 머지않아",
+    pos: "부사",
+    synonym: "もうすぐ",
+    years: ["예상어휘(유의어)"],
+    example: "列車はまもなく一番線に到着します。",
+    exampleReading: "れっしゃはまもなくいちばんせんにとうちゃくします。",
+    exampleMeaning: "열차는 곧 1번 선에 도착합니다."
+  }
 ];
 
+// =========================================================================
+// 1. 중복 기출 병합 및 히라가나 전용 판별 헬퍼 함수
+// =========================================================================
+
+/**
+ * 여러 기출 연도/분류에 중복 등장하는 단어를 하나로 합치고,
+ * `n년·n년도 중복 기출` 문자열(duplicateLabel / dupLabel)을 생성합니다.
+ */
 function mergeVocabEntries(rawList) {
   const map = new Map();
+
   rawList.forEach((item, index) => {
     const key = `${item.word}__${item.reading}`;
     if (!map.has(key)) {
       map.set(key, {
-        id: `vocab_${index + 1}`,
+        id: item.id || `vocab_${index + 1}`,
         word: item.word,
         reading: item.reading,
         meaning: item.meaning,
         pos: item.pos,
         synonym: item.synonym || "",
-        years: [...item.years],
-        example: item.example,
-        exampleReading: item.exampleReading,
-        exampleMeaning: item.exampleMeaning
+        years: [...(item.years || [])],
+        example: item.example || "",
+        exampleReading: item.exampleReading || "",
+        exampleMeaning: item.exampleMeaning || ""
       });
     } else {
       const existing = map.get(key);
-      item.years.forEach((yr) => {
+      (item.years || []).forEach((yr) => {
         if (!existing.years.includes(yr)) {
           existing.years.push(yr);
         }
@@ -903,74 +1344,377 @@ function mergeVocabEntries(rawList) {
       if (!existing.synonym && item.synonym) {
         existing.synonym = item.synonym;
       }
+      if (!existing.example && item.example) {
+        existing.example = item.example;
+        existing.exampleReading = item.exampleReading || "";
+        existing.exampleMeaning = item.exampleMeaning || "";
+      }
     }
   });
 
   return Array.from(map.values()).map((entry) => {
     const isDuplicate = entry.years.length > 1;
-    const duplicateLabel = isDuplicate
-      ? `${entry.years.join("·")} 중복 기출`
-      : entry.years[0];
+    const duplicateLabel = formatDuplicateYearsLabel(entry.years);
+    const kanaOnly = isKanaOnlyWord(entry.word);
     return {
       ...entry,
       isDuplicate,
-      duplicateLabel
+      dupLabel: duplicateLabel,
+      duplicateLabel,
+      kanaOnly
     };
   });
 }
 
+/**
+ * 연도/분류 배열을 받아 중복 시 `n년·n년도 중복 기출` 형태로 포맷팅합니다.
+ * 예: ["2021년 기출(유의표현)", "2023년 기출(한자읽기)"] -> "2021년·2023년도 중복 기출"
+ * 예: ["2025년 기출(한자읽기)", "2010년 기출(용법)"] -> "2025년·2010년도 중복 기출"
+ */
+function formatDuplicateYearsLabel(years = []) {
+  if (!Array.isArray(years) || years.length === 0) return "";
+  if (years.length === 1) return years[0];
+
+  const extracted = years.map((entry) => {
+    const yearMatch = String(entry).match(/(\d{4})년/);
+    if (yearMatch) {
+      return `${yearMatch[1]}년`;
+    }
+    return String(entry).trim();
+  });
+
+  const uniqueParts = Array.from(new Set(extracted));
+  if (uniqueParts.length > 1 && uniqueParts.every((p) => /^\d{4}년$/.test(p))) {
+    const lastIdx = uniqueParts.length - 1;
+    uniqueParts[lastIdx] = `${uniqueParts[lastIdx].replace(/년$/, "")}년도`;
+    return `${uniqueParts.join("·")} 중복 기출`;
+  }
+
+  return `${years.join(" · ")} 중복 기출`;
+}
+
+/**
+ * 표기가 히라가나(장음 기호 ー, 공백, 물결표 〜 등 포함)로만 구성되어 있는지 판별합니다.
+ * 한자나 가타카나(외래어 등)가 포함된 단어는 false를 반환합니다.
+ */
+function isKanaOnlyWord(word) {
+  if (!word || typeof word !== "string") return false;
+  const trimmed = word.trim();
+  if (!trimmed) return false;
+  return /^[ぁ-ゟー・〜～\s]+$/.test(trimmed);
+}
+
 const VOCAB_DATA = mergeVocabEntries(RAW_VOCAB_ITEMS);
 
-const STORAGE_KEY = "jlpt_n3_study_state_v1";
+// =========================================================================
+// 2. 로컬 스토리지 상태 관리 스토어 모듈
+// =========================================================================
 
-function createDefaultState() {
+const STORAGE_KEY = "jlpt_vocab_study_app_v1";
+
+function createDefaultStoreState() {
   return {
-    theme: "light",
-    ttsSpeed: 0.95,
-    statusMap: {},
-    favorites: [],
-    posNotes: {},
-    decks: [],
-    wrongLog: {}
+    theme: "light",           // "light" | "dark"
+    ttsSpeed: 0.95,           // 0.6 ~ 1.4
+    maskReading: false,       // 전역 히라가나(읽기) 가림
+    maskMeaning: false,       // 전역 뜻 가림
+    statusMap: {},            // { [vocabId]: "known" | "unsure" | "unknown" }
+    favorites: [],            // [vocabId, ...]
+    posNotes: {},             // { [vocabId]: string }
+    decks: [],                // [{ id: string, name: string, wordIds: string[] }]
+    wrongLog: {}              // { [vocabId]: { count: number, lastMode: string, lastInput: string, lastAt: string } }
   };
 }
 
-let appState = loadAppState();
+function normalizeStoreState(rawObj) {
+  const base = createDefaultStoreState();
+  if (!rawObj || typeof rawObj !== "object") return base;
 
-function loadAppState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return createDefaultState();
-    return { ...createDefaultState(), ...JSON.parse(raw) };
-  } catch (err) {
-    return createDefaultState();
+  const validTheme = rawObj.theme === "dark" ? "dark" : "light";
+  const parsedSpeed = Number(rawObj.ttsSpeed);
+  const validSpeed = Number.isFinite(parsedSpeed)
+    ? Math.min(1.4, Math.max(0.6, Number(parsedSpeed.toFixed(2))))
+    : base.ttsSpeed;
+
+  const cleanStatusMap = {};
+  if (rawObj.statusMap && typeof rawObj.statusMap === "object") {
+    Object.entries(rawObj.statusMap).forEach(([k, v]) => {
+      if (v === "known" || v === "unsure" || v === "unknown") {
+        cleanStatusMap[k] = v;
+      }
+    });
   }
+
+  const cleanFavorites = Array.isArray(rawObj.favorites)
+    ? Array.from(new Set(rawObj.favorites.filter((id) => typeof id === "string")))
+    : [];
+
+  const cleanPosNotes = {};
+  if (rawObj.posNotes && typeof rawObj.posNotes === "object") {
+    Object.entries(rawObj.posNotes).forEach(([k, v]) => {
+      if (typeof v === "string") {
+        cleanPosNotes[k] = v;
+      }
+    });
+  }
+
+  const cleanDecks = Array.isArray(rawObj.decks)
+    ? rawObj.decks
+        .filter((d) => d && typeof d === "object" && typeof d.name === "string" && d.name.trim())
+        .map((d, idx) => ({
+          id: typeof d.id === "string" && d.id ? d.id : `deck_${Date.now()}_${idx}`,
+          name: d.name.trim(),
+          wordIds: Array.isArray(d.wordIds)
+            ? Array.from(new Set(d.wordIds.filter((id) => typeof id === "string")))
+            : []
+        }))
+    : [];
+
+  const cleanWrongLog = {};
+  if (rawObj.wrongLog && typeof rawObj.wrongLog === "object") {
+    Object.entries(rawObj.wrongLog).forEach(([k, v]) => {
+      if (v && typeof v === "object") {
+        const count = Number(v.count);
+        cleanWrongLog[k] = {
+          count: Number.isFinite(count) && count > 0 ? Math.floor(count) : 1,
+          lastMode: typeof v.lastMode === "string" ? v.lastMode : "quiz",
+          lastInput: typeof v.lastInput === "string" ? v.lastInput : "",
+          lastAt: typeof v.lastAt === "string" ? v.lastAt : new Date().toISOString()
+        };
+      }
+    });
+  }
+
+  return {
+    theme: validTheme,
+    ttsSpeed: validSpeed,
+    maskReading: Boolean(rawObj.maskReading),
+    maskMeaning: Boolean(rawObj.maskMeaning),
+    statusMap: cleanStatusMap,
+    favorites: cleanFavorites,
+    posNotes: cleanPosNotes,
+    decks: cleanDecks,
+    wrongLog: cleanWrongLog
+  };
 }
 
-function saveAppState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
-}
+const StudyStore = (() => {
+  let currentState = load();
 
-function exportAppStateJson() {
-  const jsonStr = JSON.stringify(appState, null, 2);
-  const blob = new Blob([jsonStr], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `jlpt-n3-vocab-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return createDefaultStoreState();
+      return normalizeStoreState(JSON.parse(raw));
+    } catch (_err) {
+      return createDefaultStoreState();
+    }
+  }
 
-function importAppStateJsonText(jsonText) {
-  const parsed = JSON.parse(jsonText);
-  appState = { ...createDefaultState(), ...parsed };
-  saveAppState();
-  return appState;
-}
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(currentState));
+    } catch (_err) {
+      // 스토리지 용량 초과 등 예외 시 무시
+    }
+  }
 
-function resetAppStateData() {
-  appState = createDefaultState();
-  saveAppState();
-  return appState;
-}
+  function getState() {
+    return currentState;
+  }
+
+  function getStatus(vocabId) {
+    return currentState.statusMap[vocabId] || "unknown";
+  }
+
+  function setStatus(vocabId, status) {
+    if (!["known", "unsure", "unknown"].includes(status)) return;
+    currentState.statusMap[vocabId] = status;
+    save();
+  }
+
+  function isFavorite(vocabId) {
+    return currentState.favorites.includes(vocabId);
+  }
+
+  function toggleFavorite(vocabId) {
+    const idx = currentState.favorites.indexOf(vocabId);
+    if (idx >= 0) {
+      currentState.favorites.splice(idx, 1);
+    } else {
+      currentState.favorites.push(vocabId);
+    }
+    save();
+    return isFavorite(vocabId);
+  }
+
+  function getPosNote(item) {
+    if (!item) return "";
+    const custom = currentState.posNotes[item.id];
+    if (typeof custom === "string" && custom.trim() !== "") {
+      return custom;
+    }
+    return item.pos || "";
+  }
+
+  function setPosNote(vocabId, noteText) {
+    const trimmed = String(noteText ?? "").trim();
+    if (trimmed) {
+      currentState.posNotes[vocabId] = trimmed;
+    } else {
+      delete currentState.posNotes[vocabId];
+    }
+    save();
+  }
+
+  function createDeck(name, wordIds = []) {
+    const trimmedName = String(name ?? "").trim();
+    if (!trimmedName) return null;
+    const uniqueIds = Array.from(new Set((wordIds || []).filter(Boolean)));
+    const newDeck = {
+      id: `deck_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      name: trimmedName,
+      wordIds: uniqueIds
+    };
+    currentState.decks.push(newDeck);
+    save();
+    return newDeck;
+  }
+
+  function addWordsToDeck(deckId, wordIds = []) {
+    const deck = currentState.decks.find((d) => d.id === deckId);
+    if (!deck) return null;
+    const merged = new Set(deck.wordIds);
+    (wordIds || []).forEach((id) => {
+      if (id) merged.add(id);
+    });
+    deck.wordIds = Array.from(merged);
+    save();
+    return deck;
+  }
+
+  function recordWrongAnswer(vocabId, mode = "quiz", userInput = "") {
+    if (!vocabId) return;
+    const prev = currentState.wrongLog[vocabId];
+    currentState.wrongLog[vocabId] = {
+      count: prev ? prev.count + 1 : 1,
+      lastMode: mode,
+      lastInput: String(userInput ?? ""),
+      lastAt: new Date().toISOString()
+    };
+    save();
+  }
+
+  function resolveWrongAnswer(vocabId) {
+    if (!vocabId || !currentState.wrongLog[vocabId]) return;
+    delete currentState.wrongLog[vocabId];
+    save();
+  }
+
+  function clearAllWrongAnswers() {
+    currentState.wrongLog = {};
+    save();
+  }
+
+  function setTheme(theme) {
+    currentState.theme = theme === "dark" ? "dark" : "light";
+    save();
+  }
+
+  function setTtsSpeed(speed) {
+    const num = Number(speed);
+    if (!Number.isFinite(num)) return;
+    currentState.ttsSpeed = Math.min(1.4, Math.max(0.6, Number(num.toFixed(2))));
+    save();
+  }
+
+  function setGlobalMask(type, enabled) {
+    if (type === "reading") {
+      currentState.maskReading = Boolean(enabled);
+      save();
+    } else if (type === "meaning") {
+      currentState.maskMeaning = Boolean(enabled);
+      save();
+    }
+  }
+
+  function exportJsonBackup() {
+    const payload = {
+      app: "japanese-vocab-study-app",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      data: currentState
+    };
+    const jsonString = JSON.stringify(payload, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    anchor.href = url;
+    anchor.download = `japanese-vocab-backup-${dateStamp}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+    return true;
+  }
+
+  function importJsonBackup(jsonText) {
+    if (typeof jsonText !== "string" || !jsonText.trim()) {
+      return { ok: false, message: "비어 있는 JSON 파일입니다." };
+    }
+    try {
+      const parsed = JSON.parse(jsonText);
+      if (!parsed || typeof parsed !== "object") {
+        return { ok: false, message: "올바른 JSON 객체 형식이 아닙니다." };
+      }
+      const rawData = parsed.data && typeof parsed.data === "object" ? parsed.data : parsed;
+      const hasKnownField =
+        "statusMap" in rawData ||
+        "favorites" in rawData ||
+        "posNotes" in rawData ||
+        "decks" in rawData ||
+        "wrongLog" in rawData ||
+        "theme" in rawData ||
+        "ttsSpeed" in rawData;
+
+      if (!hasKnownField) {
+        return { ok: false, message: "학습 데이터 구조가 일치하지 않는 백업 파일입니다." };
+      }
+
+      currentState = normalizeStoreState(rawData);
+      save();
+      return { ok: true, message: "학습 데이터를 성공적으로 복원했습니다.", state: currentState };
+    } catch (_err) {
+      return { ok: false, message: "JSON 구문 분석에 실패했습니다. 유효한 백업 파일을 선택해 주세요." };
+    }
+  }
+
+  function resetAllData() {
+    currentState = createDefaultStoreState();
+    save();
+    return currentState;
+  }
+
+  return {
+    getState,
+    save,
+    getStatus,
+    setStatus,
+    isFavorite,
+    toggleFavorite,
+    getPosNote,
+    setPosNote,
+    createDeck,
+    addWordsToDeck,
+    recordWrongAnswer,
+    resolveWrongAnswer,
+    clearAllWrongAnswers,
+    setTheme,
+    setTtsSpeed,
+    setGlobalMask,
+    exportJsonBackup,
+    importJsonBackup,
+    resetAllData
+  };
+})();
