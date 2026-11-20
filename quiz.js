@@ -1,434 +1,660 @@
 // =========================================================================
-// 4단계: 4지선다 퀴즈, 주관식 테스트(히라가나 타일/예외규칙), 오답노트, 전역 단축키
+// 5단계: quiz.js — 4지선다 퀴즈, 주관식 테스트(직접 입력·히라가나 타일·예외규칙), 오답노트
+// - index.html, style.css, data.js, study.js와 연동
 // =========================================================================
-let mcQuizState = null;
-let subjQuizState = null;
-let subjInputText = "";
-let subjIsGraded = false;
-let subjLastCorrect = false;
 
-function getQuizPool(scope, category) {
-  let pool = VOCAB_DATA.filter((v) => category === "ALL" || v.years.includes(category));
-  if (scope === "FAV") {
-    pool = pool.filter((v) => isFavoriteWord(v.id));
-  } else if (scope === "unsure_unknown") {
-    pool = pool.filter((v) => ["unsure", "unknown"].includes(getWordStatus(v.id)));
-  } else if (scope === "unsure" || scope === "unknown") {
-    pool = pool.filter((v) => getWordStatus(v.id) === scope);
+let mcqSession = null;
+
+let subjSession = null;
+let subjAnswerBuffer = "";
+let subjGraded = false;
+let subjCorrect = false;
+
+// -------------------------------------------------------------------------
+// 1. 공통 출제 설정 및 범위/커스텀 단어장/암기 상태 필터링
+// -------------------------------------------------------------------------
+function getFilteredQuestionPool(scope, deckId = "", yearCategory = "ALL") {
+  const state = StudyStore.getState();
+
+  let pool = VOCAB_DATA.filter((item) => {
+    if (yearCategory && yearCategory !== "ALL" && !item.years.includes(yearCategory)) {
+      return false;
+    }
+    if (scope === "DECK") {
+      const targetDeck = state.decks.find((d) => d.id === deckId);
+      if (!targetDeck) return false;
+      return targetDeck.wordIds.includes(item.id);
+    }
+    if (scope === "FAV") {
+      return StudyStore.isFavorite(item.id);
+    }
+    if (scope === "unsure_unknown") {
+      return ["unsure", "unknown"].includes(StudyStore.getStatus(item.id));
+    }
+    if (scope === "known" || scope === "unsure" || scope === "unknown") {
+      return StudyStore.getStatus(item.id) === scope;
+    }
+    return true;
+  });
+
+  if (!pool.length) {
+    pool = [...VOCAB_DATA];
   }
-  return pool.length ? pool : [...VOCAB_DATA];
+  return pool;
 }
 
-function buildSafeOptions(target, field, correctVal) {
-  const candidates = shuffleList(VOCAB_DATA.filter((v) => v.id !== target.id));
+function buildMcqDistractors(targetItem, fieldName, correctValue) {
+  const candidates = shuffleArray(VOCAB_DATA.filter((v) => v.id !== targetItem.id));
   const picked = [];
-  const fallbackPool = ["명사 뜻", "동사 의미", "형용사 의미", "부사 표현", "関連語彙", "別の読み方"];
 
   for (const cand of candidates) {
-    const val = cand[field];
-    if (val && val !== correctVal && !picked.includes(val)) {
+    const val = cand[fieldName];
+    if (val && val !== correctValue && !picked.includes(val)) {
       picked.push(val);
     }
     if (picked.length === 3) break;
   }
 
-  for (const fb of fallbackPool) {
+  const fallbackChoices =
+    fieldName === "reading"
+      ? ["よみかた ほじょ 1", "よみかた ほじょ 2", "よみかた ほじょ 3"]
+      : ["관련 뜻 보기 1", "관련 뜻 보기 2", "관련 뜻 보기 3"];
+
+  for (const fb of fallbackChoices) {
     if (picked.length === 3) break;
-    if (fb !== correctVal && !picked.includes(fb)) {
+    if (fb !== correctValue && !picked.includes(fb)) {
       picked.push(fb);
     }
   }
 
-  return shuffleList([correctVal, ...picked]);
+  return picked.slice(0, 3);
 }
 
-function logWrongAnswer(wordId, modeLabel, userInput) {
-  const prev = appState.wrongLog[wordId] || { count: 0 };
-  appState.wrongLog[wordId] = {
-    count: prev.count + 1,
-    lastMode: modeLabel,
-    lastInput: userInput || "",
-    lastAt: new Date().toLocaleString("ko-KR")
-  };
-  saveAppState();
-}
-
-function launchMcQuiz(overrideList = null) {
+// -------------------------------------------------------------------------
+// 2. 4지선다 퀴즈 탭
+// -------------------------------------------------------------------------
+function startMcqQuiz(overrideItems = null) {
   let pool;
-  let countCfg;
+  let countVal;
   let shouldShuffle = true;
 
-  if (overrideList && overrideList.length) {
-    pool = [...overrideList];
-    countCfg = pool.length;
+  if (Array.isArray(overrideItems) && overrideItems.length > 0) {
+    pool = [...overrideItems];
+    countVal = "ALL";
+    shouldShuffle = true;
   } else {
-    const scope = document.getElementById("quizScopeSelect").value;
-    const cat = document.getElementById("quizCategorySelect").value;
-    countCfg = document.getElementById("quizCountSelect").value;
-    shouldShuffle = document.getElementById("quizShuffleChk").checked;
-    pool = getQuizPool(scope, cat);
+    const scope = document.getElementById("quizScopeSelect")?.value || "ALL";
+    const deckId = document.getElementById("quizDeckSelect")?.value || "";
+    const yearCat = document.getElementById("quizYearCategorySelect")?.value || "ALL";
+    countVal = document.getElementById("quizCountSelect")?.value || "10";
+    shouldShuffle = document.getElementById("quizShuffleChk")?.checked ?? true;
+
+    if (scope === "DECK" && !deckId) {
+      alert("커스텀 단어장을 먼저 선택해 주세요.");
+      return;
+    }
+
+    pool = getFilteredQuestionPool(scope, deckId, yearCat);
   }
 
-  if (shouldShuffle) pool = shuffleList(pool);
-  const limit = countCfg === "ALL" ? pool.length : Math.min(Number(countCfg), pool.length);
-  const selected = pool.slice(0, limit);
+  if (shouldShuffle) {
+    pool = shuffleArray(pool);
+  }
 
-  const questions = selected.map((target) => {
-    const askReading = Math.random() < 0.5;
-    const field = askReading ? "reading" : "meaning";
-    const correctAnswer = target[field];
-    const options = buildSafeOptions(target, field, correctAnswer);
+  const limit = countVal === "ALL" ? pool.length : Math.min(Number(countVal) || 10, pool.length);
+  const chosenItems = pool.slice(0, limit);
+
+  const questions = chosenItems.map((target) => {
+    const hasSynonym = Boolean(target.synonym);
+    const roll = Math.random();
+    let mode = "meaning";
+    if (hasSynonym && roll < 0.32) {
+      mode = "synonym";
+    } else if (roll < 0.66) {
+      mode = "reading";
+    }
+
+    let promptHtml = "";
+    let correctAnswer = target.meaning;
+    let distractors = [];
+
+    if (mode === "synonym") {
+      correctAnswer = target.synonym;
+      promptHtml = `다음 단어(<strong lang="ja">${escapeHtml(target.word)}</strong> · ${escapeHtml(target.meaning)})와 의미가 가장 가까운 유의표현을 고르세요.`;
+      distractors = buildMcqDistractors(target, "synonym", correctAnswer);
+      if (distractors.length < 3) {
+        const extra = buildMcqDistractors(target, "meaning", correctAnswer);
+        for (const item of extra) {
+          if (!distractors.includes(item)) distractors.push(item);
+          if (distractors.length === 3) break;
+        }
+      }
+    } else if (mode === "reading") {
+      correctAnswer = target.reading;
+      promptHtml = `다음 단어의 올바른 히라가나 읽기를 고르세요: <strong lang="ja" style="font-size:1.35rem;">${escapeHtml(target.word)}</strong>`;
+      distractors = buildMcqDistractors(target, "reading", correctAnswer);
+    } else {
+      correctAnswer = target.meaning;
+      promptHtml = `다음 단어(<strong lang="ja">${escapeHtml(target.word)}</strong> · <span lang="ja">${escapeHtml(target.reading)}</span>)의 올바른 한국어 뜻을 고르세요.`;
+      distractors = buildMcqDistractors(target, "meaning", correctAnswer);
+    }
+
+    const options = shouldShuffle
+      ? shuffleArray([correctAnswer, ...distractors])
+      : [correctAnswer, ...distractors];
 
     return {
       item: target,
-      prompt: askReading
-        ? `다음 단어의 올바른 히라가나 읽기를 고르세요: <strong lang="ja" style="font-size:1.3rem;">${escapeText(target.word)}</strong>`
-        : `다음 단어(<strong lang="ja">${escapeText(target.word)}</strong> · <span lang="ja">${escapeText(target.reading)}</span>)의 올바른 뜻을 고르세요.`,
+      mode,
+      promptHtml,
       options,
       correctAnswer,
-      chosen: null
+      answered: null
     };
   });
 
-  mcQuizState = { questions, index: 0, score: 0 };
-  document.getElementById("quizSetupBox").classList.add("hidden");
-  document.getElementById("quizPlayBox").classList.remove("hidden");
-  renderMcQuestion();
+  mcqSession = {
+    questions,
+    index: 0,
+    score: 0
+  };
+
+  const setupCard = document.getElementById("quizSetupCard");
+  const playCard = document.getElementById("quizPlayCard");
+  if (setupCard) setupCard.hidden = true;
+  if (playCard) playCard.hidden = false;
+
+  renderMcqQuestion();
 }
 
-function renderMcQuestion() {
-  const box = document.getElementById("quizPlayBox");
-  const q = mcQuizState.questions[mcQuizState.index];
-  const total = mcQuizState.questions.length;
+function speakCurrentQuizWord() {
+  if (!mcqSession || !mcqSession.questions[mcqSession.index]) return;
+  speakJapanese(mcqSession.questions[mcqSession.index].item.word);
+}
 
-  box.innerHTML = `
-    <div class="card-top" style="margin-bottom:10px;">
-      <span class="badge">문항 ${mcQuizState.index + 1} / ${total}</span>
-      <button type="button" id="mcSpeakBtn" class="btn">🔊 발음 듣기</button>
+function renderMcqQuestion() {
+  const playCard = document.getElementById("quizPlayCard");
+  if (!playCard || !mcqSession) return;
+
+  const q = mcqSession.questions[mcqSession.index];
+  const total = mcqSession.questions.length;
+  const isLast = mcqSession.index === total - 1;
+  const isAnswered = q.answered !== null;
+  const isRight = isAnswered && q.answered === q.correctAnswer;
+
+  playCard.innerHTML = `
+    <div class="quiz-top-meta">
+      <span class="progress-badge">문항 ${mcqSession.index + 1} / ${total}</span>
+      <span class="score-label">점수: ${mcqSession.score}</span>
+      <button type="button" id="mcqSpeakBtn" class="mini-btn" data-tts-role="quiz-word">🔊 발음 듣기</button>
     </div>
-    <p style="font-size:1.05rem;">${q.prompt}</p>
-    <div class="choice-list">
+
+    <div class="subj-prompt-box">
+      <p style="font-size:1.05rem;">${q.promptHtml}</p>
+      ${q.item.example ? `
+        <p class="example-ja" lang="ja" style="margin-top:10px;">${escapeHtml(q.item.example)}</p>
+        <p class="example-meaning">${escapeHtml(q.item.exampleMeaning || "")}</p>
+      ` : ""}
+    </div>
+
+    <div class="quiz-options-list">
       ${q.options.map((opt, idx) => {
-        let cls = "btn choice-btn";
-        if (q.chosen !== null) {
-          if (opt === q.correctAnswer) cls += " correct";
-          else if (opt === q.chosen) cls += " wrong";
+        let stateClass = "";
+        if (isAnswered) {
+          if (opt === q.correctAnswer) stateClass = "is-correct";
+          else if (opt === q.answered) stateClass = "is-wrong";
         }
-        return `<button type="button" class="${cls}" data-choice-idx="${idx}" ${q.chosen !== null ? "disabled" : ""}>${idx + 1}. ${escapeText(opt)}</button>`;
+        const isJaChoice = q.mode === "reading" || q.mode === "synonym";
+        return `
+          <button
+            type="button"
+            class="quiz-option-btn ${stateClass}"
+            data-option-index="${idx}"
+            ${isJaChoice ? 'lang="ja"' : ""}
+            ${isAnswered ? "disabled" : ""}
+          >
+            ${idx + 1}. ${escapeHtml(opt)}
+          </button>
+        `;
       }).join("")}
     </div>
-    <div id="mcFeedbackSlot"></div>
+
+    ${isAnswered ? `
+      <div class="feedback-box ${isRight ? "is-correct" : "is-wrong"}">
+        <strong>${isRight ? "✅ 정답입니다!" : `❌ 오답입니다. 정답: ${escapeHtml(q.correctAnswer)}`}</strong>
+        <p style="margin-top:6px;">
+          <span lang="ja"><strong>${escapeHtml(q.item.word)}</strong> (${escapeHtml(q.item.reading)})</span>
+          — ${escapeHtml(q.item.meaning)} · <span class="badge pos-badge">${escapeHtml(StudyStore.getPosNote(q.item))}</span>
+        </p>
+      </div>
+    ` : ""}
+
+    <div class="quiz-footer-actions">
+      ${isAnswered ? `
+        <button type="button" id="mcqNextBtn" class="action-btn primary">
+          ${isLast ? "퀴즈 결과 보기" : "다음 문제 →"}
+        </button>
+      ` : ""}
+      <button type="button" id="mcqQuitBtn" class="action-btn">설정으로 돌아가기</button>
+    </div>
   `;
 
-  document.getElementById("mcSpeakBtn").addEventListener("click", () => speakJaText(q.item.word));
+  document.getElementById("mcqSpeakBtn")?.addEventListener("click", speakCurrentQuizWord);
 
-  box.querySelectorAll(".choice-btn").forEach((btn) => {
+  playCard.querySelectorAll(".quiz-option-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const picked = q.options[Number(btn.dataset.choiceIdx)];
-      q.chosen = picked;
-      const ok = picked === q.correctAnswer;
-      if (ok) mcQuizState.score += 1;
-      else logWrongAnswer(q.item.id, "4지선다 퀴즈", picked);
-      renderMcQuestion();
+      if (q.answered !== null) return;
+      const chosen = q.options[Number(btn.dataset.optionIndex)];
+      q.answered = chosen;
+      if (chosen === q.correctAnswer) {
+        mcqSession.score += 1;
+      } else {
+        StudyStore.recordWrongAnswer(q.item.id, "4지선다 퀴즈", chosen);
+        refreshAllStudyUI();
+      }
+      renderMcqQuestion();
     });
   });
 
-  if (q.chosen !== null) {
-    const ok = q.chosen === q.correctAnswer;
-    const isLast = mcQuizState.index === total - 1;
-    document.getElementById("mcFeedbackSlot").innerHTML = `
-      <div class="feedback-box ${ok ? "ok" : "ng"}">
-        <strong>${ok ? "✅ 정답입니다!" : `❌ 오답입니다. 정답: ${escapeText(q.correctAnswer)}`}</strong>
-        <p style="font-size:0.88rem; margin-top:4px;"><span lang="ja">${escapeText(q.item.word)} (${escapeText(q.item.reading)})</span> — ${escapeText(q.item.meaning)} (${escapeText(getWordPosMemo(q.item))})</p>
-        <p class="muted-text" style="margin-top:4px;" lang="ja">${escapeText(q.item.example)}</p>
-        <p class="muted-text">${escapeText(q.item.exampleMeaning)}</p>
-      </div>
-      <div class="button-row" style="justify-content:space-between;">
-        <button type="button" id="mcQuitBtn" class="btn">설정으로</button>
-        <button type="button" id="mcNextBtn" class="btn btn-primary">${isLast ? "결과 보기" : "다음 문제 →"}</button>
-      </div>
-    `;
+  document.getElementById("mcqNextBtn")?.addEventListener("click", () => {
+    if (!isLast) {
+      mcqSession.index += 1;
+      renderMcqQuestion();
+    } else {
+      renderMcqResult();
+    }
+  });
 
-    document.getElementById("mcQuitBtn").addEventListener("click", closeMcQuizToSetup);
-    document.getElementById("mcNextBtn").addEventListener("click", () => {
-      if (!isLast) {
-        mcQuizState.index += 1;
-        renderMcQuestion();
-      } else {
-        renderMcSummary();
-      }
-    });
-  }
+  document.getElementById("mcqQuitBtn")?.addEventListener("click", resetMcqToSetup);
 }
 
-function closeMcQuizToSetup() {
-  document.getElementById("quizPlayBox").classList.add("hidden");
-  document.getElementById("quizSetupBox").classList.remove("hidden");
-  refreshStudyViews();
-}
+function renderMcqResult() {
+  const playCard = document.getElementById("quizPlayCard");
+  if (!playCard || !mcqSession) return;
 
-function renderMcSummary() {
-  const box = document.getElementById("quizPlayBox");
-  const total = mcQuizState.questions.length;
-  const wrongItems = mcQuizState.questions.filter((q) => q.chosen !== q.correctAnswer).map((q) => q.item);
-  box.innerHTML = `
-    <h2 class="section-heading">4지선다 퀴즈 결과</h2>
-    <p style="font-size:1.1rem; margin-bottom:12px;">점수: <strong>${mcQuizState.score} / ${total}</strong> (${Math.round((mcQuizState.score / total) * 100)}%)</p>
-    <div class="button-row">
-      <button type="button" id="mcRetryAllBtn" class="btn btn-primary">다시 풀기</button>
-      ${wrongItems.length ? `<button type="button" id="mcRetryWrongBtn" class="btn btn-danger">틀린 문제만 다시 풀기 (${wrongItems.length}개)</button>` : ""}
-      <button type="button" id="mcBackSetupBtn" class="btn">설정 화면으로</button>
+  const total = mcqSession.questions.length;
+  const pct = total ? Math.round((mcqSession.score / total) * 100) : 0;
+  const wrongItems = mcqSession.questions
+    .filter((q) => q.answered !== q.correctAnswer)
+    .map((q) => q.item);
+
+  playCard.innerHTML = `
+    <h2 class="section-title">4지선다 퀴즈 결과</h2>
+    <p style="font-size:1.15rem; margin:12px 0 16px;">
+      최종 점수: <strong>${mcqSession.score} / ${total}</strong> (${pct}%)
+    </p>
+    <div class="button-group">
+      <button type="button" id="mcqRetryAllBtn" class="action-btn primary">다시 풀기</button>
+      ${wrongItems.length > 0 ? `
+        <button type="button" id="mcqRetryWrongBtn" class="action-btn danger">
+          틀린 단어만 다시 풀기 (${wrongItems.length}개)
+        </button>
+      ` : ""}
+      <button type="button" id="mcqBackSetupBtn" class="action-btn">설정 화면으로</button>
     </div>
   `;
-  document.getElementById("mcRetryAllBtn").addEventListener("click", () => launchMcQuiz());
-  document.getElementById("mcBackSetupBtn").addEventListener("click", closeMcQuizToSetup);
-  const wrongBtn = document.getElementById("mcRetryWrongBtn");
-  if (wrongBtn) wrongBtn.addEventListener("click", () => launchMcQuiz(wrongItems));
+
+  document.getElementById("mcqRetryAllBtn")?.addEventListener("click", () => startMcqQuiz());
+  document.getElementById("mcqBackSetupBtn")?.addEventListener("click", resetMcqToSetup);
+  document.getElementById("mcqRetryWrongBtn")?.addEventListener("click", () => startMcqQuiz(wrongItems));
 }
 
-function isKanaOnlyText(str) {
-  return /^[ぁ-ゟー・〜\s]+$/.test((str || "").trim());
-}
-
-function makeKanaTiles(reading) {
-  const chars = Array.from(reading);
-  const distractors = ["か", "き", "く", "け", "こ", "さ", "し", "す", "た", "ち", "つ", "て", "と", "な", "に", "ぬ", "ね", "の", "は", "ま", "み", "む", "め", "も", "ら", "り", "る", "れ", "ろ", "ん", "っ"];
-  const list = [...chars];
-  while (list.length < Math.min(10, chars.length + 4)) {
-    list.push(distractors[Math.floor(Math.random() * distractors.length)]);
+function resetMcqToSetup() {
+  mcqSession = null;
+  const playCard = document.getElementById("quizPlayCard");
+  const setupCard = document.getElementById("quizSetupCard");
+  if (playCard) {
+    playCard.hidden = true;
+    playCard.innerHTML = "";
   }
-  return shuffleList(list).map((ch, idx) => ({ id: `tile_${idx}_${ch}`, ch, used: false }));
+  if (setupCard) setupCard.hidden = false;
+  refreshAllStudyUI();
 }
 
-function launchSubjectiveTest(overrideList = null) {
+// -------------------------------------------------------------------------
+// 3. 주관식 테스트 탭 (직접 입력 + 히라가나 타일 + 히라가나 전용 단어 예외 규칙)
+// -------------------------------------------------------------------------
+function createKanaTileSet(reading) {
+  const targetChars = Array.from(String(reading || "").trim());
+  const decoys = [
+    "あ", "い", "う", "え", "お",
+    "か", "き", "く", "け", "こ",
+    "さ", "し", "す", "せ", "そ",
+    "た", "ち", "つ", "て", "と",
+    "な", "に", "ぬ", "ね", "の",
+    "は", "ひ", "ふ", "へ", "ほ",
+    "ま", "み", "む", "め", "も",
+    "や", "ゆ", "よ",
+    "ら", "り", "る", "れ", "ろ",
+    "わ", "を", "ん", "っ", "ー"
+  ];
+
+  const tiles = [...targetChars];
+  const desiredTotal = Math.max(targetChars.length + 3, Math.min(12, targetChars.length + 6));
+  while (tiles.length < desiredTotal) {
+    const pick = decoys[Math.floor(Math.random() * decoys.length)];
+    tiles.push(pick);
+  }
+
+  return shuffleArray(tiles).map((ch, idx) => ({
+    id: `kana_tile_${idx}_${ch}`,
+    ch,
+    used: false
+  }));
+}
+
+function startSubjectiveTest(overrideItems = null) {
   let pool;
-  let countCfg;
+  let countVal;
   let shouldShuffle = true;
 
-  if (overrideList && overrideList.length) {
-    pool = [...overrideList];
-    countCfg = pool.length;
+  if (Array.isArray(overrideItems) && overrideItems.length > 0) {
+    pool = [...overrideItems];
+    countVal = "ALL";
+    shouldShuffle = true;
   } else {
-    const scope = document.getElementById("subjScopeSelect").value;
-    countCfg = document.getElementById("subjCountSelect").value;
-    shouldShuffle = document.getElementById("subjShuffleChk").checked;
-    pool = getQuizPool(scope, "ALL");
+    const scope = document.getElementById("subjScopeSelect")?.value || "ALL";
+    const deckId = document.getElementById("subjDeckSelect")?.value || "";
+    countVal = document.getElementById("subjCountSelect")?.value || "10";
+    shouldShuffle = document.getElementById("subjShuffleChk")?.checked ?? true;
+
+    if (scope === "DECK" && !deckId) {
+      alert("커스텀 단어장을 먼저 선택해 주세요.");
+      return;
+    }
+
+    pool = getFilteredQuestionPool(scope, deckId, "ALL");
   }
 
-  if (shouldShuffle) pool = shuffleList(pool);
-  const limit = countCfg === "ALL" ? pool.length : Math.min(Number(countCfg), pool.length);
+  if (shouldShuffle) {
+    pool = shuffleArray(pool);
+  }
+
+  const limit = countVal === "ALL" ? pool.length : Math.min(Number(countVal) || 10, pool.length);
   const selected = pool.slice(0, limit);
 
-  subjQuizState = {
+  subjSession = {
     questions: selected.map((item) => ({
       item,
-      isKanaOnlyException: isKanaOnlyText(item.word),
-      tiles: makeKanaTiles(item.reading)
+      kanaOnlyException: isKanaOnlyWord(item.word),
+      tiles: createKanaTileSet(item.reading)
     })),
     index: 0,
     score: 0
   };
 
-  document.getElementById("subjSetupBox").classList.add("hidden");
-  document.getElementById("subjPlayBox").classList.remove("hidden");
+  const setupCard = document.getElementById("subjSetupCard");
+  const playCard = document.getElementById("subjPlayCard");
+  if (setupCard) setupCard.hidden = true;
+  if (playCard) playCard.hidden = false;
+
   prepareSubjectiveQuestion();
 }
 
 function prepareSubjectiveQuestion() {
-  subjInputText = "";
-  subjIsGraded = false;
-  subjLastCorrect = false;
-  const q = subjQuizState.questions[subjQuizState.index];
-  q.tiles.forEach((t) => (t.used = false));
+  subjAnswerBuffer = "";
+  subjGraded = false;
+  subjCorrect = false;
+  if (!subjSession) return;
+  const q = subjSession.questions[subjSession.index];
+  q.tiles.forEach((t) => {
+    t.used = false;
+  });
   renderSubjectiveQuestion();
 }
 
+function speakCurrentSubjWord() {
+  if (!subjSession || !subjSession.questions[subjSession.index]) return;
+  speakJapanese(subjSession.questions[subjSession.index].item.word);
+}
+
 function renderSubjectiveQuestion() {
-  const box = document.getElementById("subjPlayBox");
-  const q = subjQuizState.questions[subjQuizState.index];
+  if (!subjSession) return;
+  const q = subjSession.questions[subjSession.index];
   const item = q.item;
-  const mode = document.getElementById("subjInputModeSelect").value;
-  const hideMeaning = document.getElementById("subjHideMeaningChk").checked;
-  const showHint = document.getElementById("subjFirstHintChk").checked;
+  const total = subjSession.questions.length;
+  const isLast = subjSession.index === total - 1;
 
-  const promptBlock = q.isKanaOnlyException
-    ? `
-      <span class="badge dup" style="margin-bottom:6px;">예외 규칙: 히라가나 전용 단어 → 뜻 제시 후 히라가나 입력</span>
-      <div style="font-size:1.3rem; font-weight:700;">뜻: ${escapeText(item.meaning)}</div>
-      <p class="muted-text">해당 단어의 히라가나를 직접 입력하거나 타일을 순서대로 선택하세요.</p>
-    `
-    : `
-      <div style="font-size:1.55rem; font-weight:700;" lang="ja">${escapeText(item.word)}</div>
-      ${!hideMeaning ? `<div class="muted-text" style="font-size:0.98rem; margin-top:4px;">뜻: ${escapeText(item.meaning)}</div>` : `<div class="muted-text" style="margin-top:4px;">(뜻 숨김)</div>`}
-    `;
+  const inputMode = document.getElementById("subjInputModeSelect")?.value || "both";
+  const hideMeaning = document.getElementById("subjHideMeaningChk")?.checked ?? false;
+  const firstHint = document.getElementById("subjFirstCharHintChk")?.checked ?? false;
 
-  box.innerHTML = `
-    <div class="card-top" style="margin-bottom:10px;">
-      <span class="badge">주관식 ${subjQuizState.index + 1} / ${subjQuizState.questions.length}</span>
-      <button type="button" id="subjSpeakBtn" class="btn">🔊 발음 듣기</button>
-    </div>
-    <div style="margin-bottom:12px;">${promptBlock}</div>
-    ${showHint ? `<div class="badge" style="margin-bottom:10px;">💡 첫글자 힌트: <strong lang="ja">${escapeText(Array.from(item.reading)[0])}</strong></div>` : ""}
+  const progressEl = document.getElementById("subjProgressText");
+  const ruleBadgeEl = document.getElementById("subjRuleBadge");
+  const scoreEl = document.getElementById("subjScoreText");
+  const kindEl = document.getElementById("subjPromptKind");
+  const wordEl = document.getElementById("subjPromptWord");
+  const meaningEl = document.getElementById("subjPromptMeaning");
+  const hintEl = document.getElementById("subjHintArea");
 
-    ${(mode === "typing" || mode === "both") ? `
-      <div style="margin-bottom:12px;">
-        <input id="subjTypingInput" type="text" class="input full-width" lang="ja" value="${escapeText(subjInputText)}" placeholder="히라가나 입력" ${subjIsGraded ? "disabled" : ""} />
-      </div>
-    ` : ""}
+  if (progressEl) progressEl.textContent = `${subjSession.index + 1} / ${total}`;
+  if (scoreEl) scoreEl.textContent = `점수: ${subjSession.score}`;
 
-    ${(mode === "tiles" || mode === "both") ? `
-      <div style="margin-bottom:12px;">
-        <div id="subjTileTray" class="kana-tray" lang="ja">${escapeText(subjInputText || "타일을 순서대로 클릭하세요")}</div>
-        <div class="kana-tiles">
-          ${q.tiles.map((t) => `<button type="button" class="btn kana-tile" data-tile-id="${t.id}" lang="ja" ${t.used || subjIsGraded ? "disabled" : ""}>${escapeText(t.ch)}</button>`).join("")}
-        </div>
-        <div class="button-row">
-          <button type="button" id="subjTileBackBtn" class="btn" ${subjIsGraded ? "disabled" : ""}>⌫ 한 글자 지우기</button>
-          <button type="button" id="subjTileClearBtn" class="btn" ${subjIsGraded ? "disabled" : ""}>전체 초기화</button>
-        </div>
-      </div>
-    ` : ""}
-
-    <div class="button-row">
-      ${!subjIsGraded
-        ? `<button type="button" id="subjGradeBtn" class="btn btn-primary">채점하기</button>`
-        : `<button type="button" id="subjNextBtn" class="btn btn-primary">${subjQuizState.index === subjQuizState.questions.length - 1 ? "테스트 종료" : "다음 문제 →"}</button>`}
-      <button type="button" id="subjQuitBtn" class="btn">설정으로</button>
-    </div>
-
-    <div id="subjFeedbackSlot"></div>
-  `;
-
-  document.getElementById("subjSpeakBtn").addEventListener("click", () => speakJaText(item.word));
-  document.getElementById("subjQuitBtn").addEventListener("click", () => {
-    box.classList.add("hidden");
-    document.getElementById("subjSetupBox").classList.remove("hidden");
-    refreshStudyViews();
-  });
-
-  const typingEl = document.getElementById("subjTypingInput");
-  if (typingEl) {
-    typingEl.addEventListener("input", (e) => { subjInputText = e.target.value; });
-    typingEl.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !subjIsGraded) gradeSubjectiveQuestion();
-    });
-  }
-
-  box.querySelectorAll(".kana-tile").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const tile = q.tiles.find((t) => t.id === btn.dataset.tileId);
-      if (!tile || tile.used) return;
-      tile.used = true;
-      subjInputText += tile.ch;
-      renderSubjectiveQuestion();
-    });
-  });
-
-  const backBtn = document.getElementById("subjTileBackBtn");
-  if (backBtn) {
-    backBtn.addEventListener("click", () => {
-      if (!subjInputText.length) return;
-      const chars = Array.from(subjInputText);
-      const removed = chars.pop();
-      subjInputText = chars.join("");
-      const tile = q.tiles.find((t) => t.used && t.ch === removed);
-      if (tile) tile.used = false;
-      renderSubjectiveQuestion();
-    });
-  }
-
-  const clearBtn = document.getElementById("subjTileClearBtn");
-  if (clearBtn) {
-    clearBtn.addEventListener("click", () => {
-      subjInputText = "";
-      q.tiles.forEach((t) => (t.used = false));
-      renderSubjectiveQuestion();
-    });
-  }
-
-  const gradeBtn = document.getElementById("subjGradeBtn");
-  if (gradeBtn) gradeBtn.addEventListener("click", gradeSubjectiveQuestion);
-
-  const nextBtn = document.getElementById("subjNextBtn");
-  if (nextBtn) {
-    nextBtn.addEventListener("click", () => {
-      if (subjQuizState.index < subjQuizState.questions.length - 1) {
-        subjQuizState.index += 1;
-        prepareSubjectiveQuestion();
+  // 예외 규칙: 표기가 히라가나로만 된 단어는 한글 뜻을 제시하고 히라가나 직접 입력 또는 타일 선택으로 출제
+  if (q.kanaOnlyException) {
+    if (ruleBadgeEl) {
+      ruleBadgeEl.hidden = false;
+      ruleBadgeEl.textContent = "예외 규칙: 히라가나 전용 단어 → 뜻 제시 · 히라가나 입력/타일";
+    }
+    if (kindEl) kindEl.textContent = "한글 뜻을 보고 히라가나를 입력하세요";
+    if (wordEl) {
+      wordEl.hidden = true;
+      wordEl.textContent = "";
+    }
+    if (meaningEl) {
+      meaningEl.hidden = false;
+      meaningEl.textContent = `뜻: ${item.meaning}`;
+      meaningEl.classList.remove("is-revealed");
+    }
+  } else {
+    if (ruleBadgeEl) {
+      ruleBadgeEl.hidden = true;
+      ruleBadgeEl.textContent = "";
+    }
+    if (kindEl) kindEl.textContent = "단어의 히라가나 읽기를 입력하세요";
+    if (wordEl) {
+      wordEl.hidden = false;
+      wordEl.textContent = item.word;
+    }
+    if (meaningEl) {
+      if (hideMeaning) {
+        meaningEl.hidden = true;
+        meaningEl.textContent = "";
       } else {
-        box.innerHTML = `
-          <h2 class="section-heading">주관식 테스트 결과</h2>
-          <p style="font-size:1.1rem; margin-bottom:12px;">점수: <strong>${subjQuizState.score} / ${subjQuizState.questions.length}</strong></p>
-          <button type="button" id="subjDoneBtn" class="btn btn-primary">설정 화면으로</button>
-        `;
-        document.getElementById("subjDoneBtn").addEventListener("click", () => {
-          box.classList.add("hidden");
-          document.getElementById("subjSetupBox").classList.remove("hidden");
-          refreshStudyViews();
-        });
+        meaningEl.hidden = false;
+        meaningEl.textContent = `뜻: ${item.meaning}`;
+        meaningEl.classList.remove("is-revealed");
       }
+    }
+  }
+
+  if (hintEl) {
+    if (firstHint) {
+      const firstChar = Array.from(item.reading)[0] || "";
+      hintEl.hidden = false;
+      hintEl.innerHTML = `💡 첫글자 힌트: <span lang="ja">${escapeHtml(firstChar)}</span>`;
+    } else {
+      hintEl.hidden = true;
+      hintEl.innerHTML = "";
+    }
+  }
+
+  // 입력 방식 토글 (typing / tiles / both)
+  const typingWrap = document.getElementById("subjDirectInputWrap");
+  const tilesWrap = document.getElementById("subjTileInputWrap");
+  if (typingWrap) typingWrap.hidden = inputMode === "tiles";
+  if (tilesWrap) tilesWrap.hidden = inputMode === "typing";
+
+  const directInput = document.getElementById("subjDirectInput");
+  if (directInput) {
+    directInput.value = subjAnswerBuffer;
+    directInput.disabled = subjGraded;
+  }
+
+  const trayEl = document.getElementById("subjSelectedTray");
+  if (trayEl) {
+    trayEl.textContent = subjAnswerBuffer || "타일을 순서대로 클릭하세요";
+  }
+
+  const tilesGrid = document.getElementById("subjKanaTilesGrid");
+  if (tilesGrid) {
+    tilesGrid.innerHTML = q.tiles
+      .map(
+        (tile) => `
+        <button
+          type="button"
+          class="kana-tile-btn ${tile.used ? "is-used" : ""}"
+          data-tile-id="${escapeHtml(tile.id)}"
+          lang="ja"
+          ${tile.used || subjGraded ? "disabled" : ""}
+        >
+          ${escapeHtml(tile.ch)}
+        </button>
+      `
+      )
+      .join("");
+
+    tilesGrid.querySelectorAll(".kana-tile-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (subjGraded) return;
+        const tile = q.tiles.find((t) => t.id === btn.dataset.tileId);
+        if (!tile || tile.used) return;
+        tile.used = true;
+        subjAnswerBuffer += tile.ch;
+        renderSubjectiveQuestion();
+      });
     });
   }
 
-  if (subjIsGraded) {
-    document.getElementById("subjFeedbackSlot").innerHTML = `
-      <div class="feedback-box ${subjLastCorrect ? "ok" : "ng"}">
-        <strong>${subjLastCorrect ? "✅ 정답입니다!" : `❌ 오답입니다. 정답 읽기: ${escapeText(item.reading)}`}</strong>
-        <p style="font-size:0.88rem; margin-top:4px;"><span lang="ja">${escapeText(item.word)}</span> — ${escapeText(item.meaning)}</p>
-        <p class="muted-text" style="margin-top:4px;" lang="ja">${escapeText(item.example)}</p>
-        <p class="muted-text">${escapeText(item.exampleMeaning)}</p>
-      </div>
-    `;
+  const backBtn = document.getElementById("subjBackspaceBtn");
+  const clearBtn = document.getElementById("subjClearTilesBtn");
+  if (backBtn) backBtn.disabled = subjGraded;
+  if (clearBtn) clearBtn.disabled = subjGraded;
+
+  const submitBtn = document.getElementById("subjSubmitBtn");
+  const nextBtn = document.getElementById("subjNextBtn");
+  if (submitBtn) submitBtn.hidden = subjGraded;
+  if (nextBtn) {
+    nextBtn.hidden = !subjGraded;
+    nextBtn.textContent = isLast ? "테스트 결과 보기" : "다음 문제 →";
+  }
+
+  const feedbackBox = document.getElementById("subjFeedbackBox");
+  if (feedbackBox) {
+    if (!subjGraded) {
+      feedbackBox.hidden = true;
+      feedbackBox.className = "feedback-box";
+      feedbackBox.innerHTML = "";
+    } else {
+      feedbackBox.hidden = false;
+      feedbackBox.className = `feedback-box ${subjCorrect ? "is-correct" : "is-wrong"}`;
+      feedbackBox.innerHTML = `
+        <strong>${subjCorrect ? "✅ 정답입니다!" : `❌ 오답입니다. 정답 히라가나: <span lang="ja">${escapeHtml(item.reading)}</span>`}</strong>
+        <p style="margin-top:6px;">
+          <span lang="ja"><strong>${escapeHtml(item.word)}</strong> (${escapeHtml(item.reading)})</span>
+          — ${escapeHtml(item.meaning)}
+        </p>
+      `;
+    }
   }
 }
 
 function gradeSubjectiveQuestion() {
-  const q = subjQuizState.questions[subjQuizState.index];
-  const answer = subjInputText.trim();
+  if (!subjSession || subjGraded) return;
+  const directInput = document.getElementById("subjDirectInput");
+  if (directInput && !directInput.hidden) {
+    subjAnswerBuffer = directInput.value;
+  }
+
+  const q = subjSession.questions[subjSession.index];
+  const userAns = subjAnswerBuffer.trim();
   const expected = q.item.reading.trim();
-  subjIsGraded = true;
-  subjLastCorrect = answer === expected;
-  if (subjLastCorrect) subjQuizState.score += 1;
-  else logWrongAnswer(q.item.id, "주관식 테스트", answer);
+
+  subjGraded = true;
+  subjCorrect = userAns === expected;
+
+  if (subjCorrect) {
+    subjSession.score += 1;
+  } else {
+    StudyStore.recordWrongAnswer(q.item.id, "주관식 테스트", userAns);
+    refreshAllStudyUI();
+  }
+
   renderSubjectiveQuestion();
 }
 
-function getWrongWordsList() {
-  return Object.keys(appState.wrongLog)
-    .map((id) => VOCAB_DATA.find((v) => v.id === id))
-    .filter(Boolean);
+function renderSubjectiveResult() {
+  const playCard = document.getElementById("subjPlayCard");
+  const setupCard = document.getElementById("subjSetupCard");
+  if (!playCard || !subjSession) return;
+
+  const total = subjSession.questions.length;
+  const pct = total ? Math.round((subjSession.score / total) * 100) : 0;
+
+  alert(`주관식 테스트 완료! 점수: ${subjSession.score} / ${total} (${pct}%)`);
+  subjSession = null;
+  playCard.hidden = true;
+  if (setupCard) setupCard.hidden = false;
+  refreshAllStudyUI();
 }
 
-function renderWrongNoteSection() {
-  const wrap = document.getElementById("wrongNoteTableWrap");
-  const list = getWrongWordsList();
+// -------------------------------------------------------------------------
+// 4. 오답노트 탭 (자동 기록·누적 오답 횟수·전역 가림 연동·재도전·복습 완료)
+// -------------------------------------------------------------------------
+function getWrongVocabEntries() {
+  const wrongLog = StudyStore.getState().wrongLog || {};
+  return Object.entries(wrongLog)
+    .map(([id, meta]) => {
+      const item = VOCAB_DATA.find((v) => v.id === id);
+      if (!item) return null;
+      return { item, meta };
+    })
+    .filter(Boolean)
+    .sort((a, b) => (b.meta.count || 0) - (a.meta.count || 0));
+}
 
-  if (!list.length) {
-    wrap.innerHTML = `<p class="muted-text" style="text-align:center; padding:18px;">저장된 오답 기록이 없습니다.</p>`;
+function renderWrongNote() {
+  const wrap = document.getElementById("wrongNoteListWrap");
+  if (!wrap) return;
+
+  const entries = getWrongVocabEntries();
+  if (!entries.length) {
+    wrap.innerHTML = `<p class="helper-note" style="text-align:center; padding:20px;">기록된 오답 단어가 없습니다. 4지선다 퀴즈나 주관식 테스트에서 틀린 단어가 자동으로 기록됩니다.</p>`;
     return;
   }
 
   wrap.innerHTML = `
-    <table class="data-table">
+    <table class="wrong-table">
       <thead>
         <tr>
           <th>단어 / 읽기</th>
           <th>뜻</th>
           <th>누적 오답 횟수</th>
-          <th>최근 유형 · 입력</th>
-          <th>복습</th>
+          <th>최근 틀린 유형 · 입력</th>
+          <th>복습 완료</th>
         </tr>
       </thead>
       <tbody>
-        ${list.map((item) => {
-          const log = appState.wrongLog[item.id];
+        ${entries.map(({ item, meta }) => {
+          const kanaOnly = isKanaOnlyWord(item.word);
           return `
-            <tr>
-              <td><strong lang="ja">${escapeText(item.word)}</strong> <span lang="ja" class="muted-text">(${escapeText(item.reading)})</span></td>
-              <td>${escapeText(item.meaning)}</td>
-              <td><span class="badge" style="background:var(--danger-soft); color:var(--danger); border-color:transparent;">${log.count}회</span></td>
-              <td class="muted-text">${escapeText(log.lastMode || "-")} · "${escapeText(log.lastInput || "-")}"</td>
-              <td><button type="button" class="btn wrong-resolve-btn" data-id="${item.id}">복습 완료</button></td>
+            <tr data-wrong-id="${escapeHtml(item.id)}">
+              <td>
+                <strong lang="ja" data-kana-only-headword="${kanaOnly}">${escapeHtml(item.word)}</strong>
+                <span lang="ja" class="maskable-reading" tabindex="0" style="color:var(--text-muted); margin-left:4px;">(${escapeHtml(item.reading)})</span>
+              </td>
+              <td>
+                <span class="maskable-meaning" tabindex="0">${escapeHtml(item.meaning)}</span>
+              </td>
+              <td>
+                <span class="wrong-count-pill">${escapeHtml(meta.count)}회</span>
+              </td>
+              <td class="helper-note">
+                ${escapeHtml(meta.lastMode || "-")} · "${escapeHtml(meta.lastInput || "-")}"
+              </td>
+              <td>
+                <button type="button" class="mini-btn resolve-wrong-btn" data-id="${escapeHtml(item.id)}">복습 완료</button>
+              </td>
             </tr>
           `;
         }).join("")}
@@ -436,118 +662,106 @@ function renderWrongNoteSection() {
     </table>
   `;
 
-  wrap.querySelectorAll(".wrong-resolve-btn").forEach((btn) => {
+  wrap.querySelectorAll(".resolve-wrong-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
-      delete appState.wrongLog[btn.dataset.id];
-      saveAppState();
-      refreshStudyViews();
+      StudyStore.resolveWrongAnswer(btn.dataset.id);
+      refreshAllStudyUI();
     });
   });
 }
 
-function setShortcutModalVisible(open) {
-  const backdrop = document.getElementById("shortcutModalBackdrop");
-  backdrop.classList.toggle("open", open);
-  backdrop.setAttribute("aria-hidden", String(!open));
-}
+// -------------------------------------------------------------------------
+// 5. 퀴즈 · 주관식 · 오답노트 이벤트 초기화
+// -------------------------------------------------------------------------
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("startQuizBtn")?.addEventListener("click", () => startMcqQuiz());
+  document.getElementById("startSubjBtn")?.addEventListener("click", () => startSubjectiveTest());
 
-(function initQuizAndShortcuts() {
-  document.getElementById("startQuizBtn").addEventListener("click", () => launchMcQuiz());
-  document.getElementById("startSubjBtn").addEventListener("click", () => launchSubjectiveTest());
-
-  document.getElementById("retryWrongQuizBtn").addEventListener("click", () => {
-    const list = getWrongWordsList();
-    if (!list.length) return alert("복습할 오답 단어가 없습니다.");
-    activateTab("quiz");
-    launchMcQuiz(list);
+  document.getElementById("subjDirectInput")?.addEventListener("input", (e) => {
+    subjAnswerBuffer = e.target.value;
   });
 
-  document.getElementById("retryWrongSubjBtn").addEventListener("click", () => {
-    const list = getWrongWordsList();
-    if (!list.length) return alert("복습할 오답 단어가 없습니다.");
-    activateTab("subjective");
-    launchSubjectiveTest(list);
+  document.getElementById("subjDirectInput")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !subjGraded) {
+      e.preventDefault();
+      gradeSubjectiveQuestion();
+    }
   });
 
-  document.getElementById("clearWrongNoteBtn").addEventListener("click", () => {
+  document.getElementById("subjBackspaceBtn")?.addEventListener("click", () => {
+    if (!subjSession || subjGraded || !subjAnswerBuffer.length) return;
+    const chars = Array.from(subjAnswerBuffer);
+    const removed = chars.pop();
+    subjAnswerBuffer = chars.join("");
+    const q = subjSession.questions[subjSession.index];
+    const usedTile = q.tiles.find((t) => t.used && t.ch === removed);
+    if (usedTile) usedTile.used = false;
+    renderSubjectiveQuestion();
+  });
+
+  document.getElementById("subjClearTilesBtn")?.addEventListener("click", () => {
+    if (!subjSession || subjGraded) return;
+    subjAnswerBuffer = "";
+    const q = subjSession.questions[subjSession.index];
+    q.tiles.forEach((t) => {
+      t.used = false;
+    });
+    renderSubjectiveQuestion();
+  });
+
+  document.getElementById("subjSubmitBtn")?.addEventListener("click", gradeSubjectiveQuestion);
+
+  document.getElementById("subjNextBtn")?.addEventListener("click", () => {
+    if (!subjSession) return;
+    if (subjSession.index < subjSession.questions.length - 1) {
+      subjSession.index += 1;
+      prepareSubjectiveQuestion();
+    } else {
+      renderSubjectiveResult();
+    }
+  });
+
+  document.getElementById("subjQuitBtn")?.addEventListener("click", () => {
+    subjSession = null;
+    const playCard = document.getElementById("subjPlayCard");
+    const setupCard = document.getElementById("subjSetupCard");
+    if (playCard) playCard.hidden = true;
+    if (setupCard) setupCard.hidden = false;
+    refreshAllStudyUI();
+  });
+
+  document.getElementById("subjSpeakBtn")?.addEventListener("click", speakCurrentSubjWord);
+
+  ["subjInputModeSelect", "subjHideMeaningChk", "subjFirstCharHintChk"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("change", () => {
+      if (subjSession) renderSubjectiveQuestion();
+    });
+  });
+
+  // 오답노트 액션
+  document.getElementById("retryWrongMcqBtn")?.addEventListener("click", () => {
+    const items = getWrongVocabEntries().map((e) => e.item);
+    if (!items.length) {
+      alert("재도전할 오답 단어가 없습니다.");
+      return;
+    }
+    switchTab("quiz");
+    startMcqQuiz(items);
+  });
+
+  document.getElementById("retryWrongSubjBtn")?.addEventListener("click", () => {
+    const items = getWrongVocabEntries().map((e) => e.item);
+    if (!items.length) {
+      alert("재도전할 오답 단어가 없습니다.");
+      return;
+    }
+    switchTab("subjective");
+    startSubjectiveTest(items);
+  });
+
+  document.getElementById("clearWrongLogsBtn")?.addEventListener("click", () => {
     if (!confirm("모든 오답 기록을 삭제하시겠습니까?")) return;
-    appState.wrongLog = {};
-    saveAppState();
-    refreshStudyViews();
+    StudyStore.clearAllWrongAnswers();
+    refreshAllStudyUI();
   });
-
-  document.getElementById("shortcutModalOpenBtn").addEventListener("click", () => setShortcutModalVisible(true));
-  document.getElementById("shortcutModalCloseBtn").addEventListener("click", () => setShortcutModalVisible(false));
-  document.getElementById("shortcutModalBackdrop").addEventListener("click", (e) => {
-    if (e.target.id === "shortcutModalBackdrop") setShortcutModalVisible(false);
-  });
-
-  document.addEventListener("keydown", (e) => {
-    const activeEl = document.activeElement;
-    const tag = activeEl ? activeEl.tagName.toLowerCase() : "";
-    const inField = ["input", "textarea", "select"].includes(tag);
-
-    if (e.key === "?") {
-      if (inField) return;
-      e.preventDefault();
-      const isOpen = document.getElementById("shortcutModalBackdrop").classList.contains("open");
-      setShortcutModalVisible(!isOpen);
-      return;
-    }
-
-    if (e.key === "Escape" && document.getElementById("shortcutModalBackdrop").classList.contains("open")) {
-      setShortcutModalVisible(false);
-      return;
-    }
-
-    if (inField) return;
-
-    if (e.key === "/") {
-      e.preventDefault();
-      activateTab("vocab");
-      setTimeout(() => document.getElementById("vocabSearchInput").focus(), 25);
-      return;
-    }
-
-    if (currentActiveTab === "flashcard" && fcDeckPool.length) {
-      const card = fcDeckPool[fcCurrentIdx];
-      if (e.code === "Space") {
-        e.preventDefault();
-        fcIsFlipped = !fcIsFlipped;
-        renderFlashcardStage();
-      } else if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        fcCurrentIdx = (fcCurrentIdx - 1 + fcDeckPool.length) % fcDeckPool.length;
-        fcIsFlipped = false;
-        renderFlashcardStage();
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        fcCurrentIdx = (fcCurrentIdx + 1) % fcDeckPool.length;
-        fcIsFlipped = false;
-        renderFlashcardStage();
-      } else if (e.key.toLowerCase() === "r") {
-        e.preventDefault();
-        speakJaText(card.word);
-      } else if (e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        toggleFavoriteWord(card.id);
-        renderFlashcardStage();
-      } else if (e.key === "1") {
-        setWordStatus(card.id, "known");
-        renderFlashcardStage();
-      } else if (e.key === "2") {
-        setWordStatus(card.id, "unsure");
-        renderFlashcardStage();
-      } else if (e.key === "3") {
-        setWordStatus(card.id, "unknown");
-        renderFlashcardStage();
-      }
-    } else if (e.key.toLowerCase() === "r") {
-      if (currentActiveTab === "quiz" && mcQuizState) {
-        speakJaText(mcQuizState.questions[mcQuizState.index].item.word);
-      } else if (currentActiveTab === "subjective" && subjQuizState) {
-        speakJaText(subjQuizState.questions[subjQuizState.index].item.word);
-      }
-    }
-  });
-})();
+});
